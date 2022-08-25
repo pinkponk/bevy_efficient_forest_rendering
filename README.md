@@ -25,7 +25,7 @@ Textured Trees 115200  (60fps all chunks) (8x8 chunks)
 
 https://user-images.githubusercontent.com/14301446/186662761-832b57ed-8096-487a-9d6f-ad7eb15ddc35.mp4
 
-My pc:
-Nvidia 1080 Ti
-AMD Ryzen 5 5600X 6-Core Processor
-32Gb Ram 2666MHz
+My Computer:
+- Nvidia 1080 Ti
+- AMD Ryzen 5 5600X 6-Core Processor
+- 32Gb Ram 2666MHz
