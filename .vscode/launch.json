@@ -1,0 +1,45 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'bevy_efficient_forest_rendering'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example",
+                    "forest"
+                ],
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_LOG": "warn,bevy_efficient_forest_rendering=debug",
+                "CARGO_MANIFEST_DIR": "${workspaceFolder}", //No need to copy over assets to debug
+            },
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'bevy_efficient_forest_rendering'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=bevy_efficient_forest_rendering",
+                    "--package=bevy_efficient_forest_rendering"
+                ],
+                "filter": {
+                    "name": "bevy_efficient_forest_rendering",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

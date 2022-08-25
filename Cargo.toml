@@ -1,0 +1,25 @@
+[package]
+name = "bevy_efficient_forest_rendering"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bevy = "0.8.0"
+bytemuck = "1.11.0"
+bevy_pbr = "0.8.0"
+itertools = "*"
+rand = "*"
+# bevy_shader_utils = { path = "../bevy-examples/libs/bevy_shader_utils" }
+wasm-bindgen = { version = "= 0.2.81" }
+noise = "0.7"                           #Procedural Noise Generation library for Rust
+iyes_loopless = "0.7.1"
+iyes_progress = "0.5.0"
+
+bevy_asset_loader = { version = "0.12.0", features = [
+    "stageless",
+] } #Needed to turn on a bunch of features in order to get assetloader to work with iyes_loopless+progress
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+bevy_web_fullscreen = { git = "https://github.com/ostwilkens/bevy_web_fullscreen.git" }
