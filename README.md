@@ -11,12 +11,15 @@ Total instanced objects 192_000 (Not all visable at once, culling)
 Total grass straws 18_000_000 (Not all visable at once, culling)
 (90fps)
 (20x20 chunks):
+
 https://user-images.githubusercontent.com/14301446/186657930-79de7f46-c1f0-4e52-b879-b182b2c9b8e2.mp4
 
 Grass 1.4 million in 1 draw call (300fps) (1 chunk):
+
 https://user-images.githubusercontent.com/14301446/186659929-6a98a0f0-8a9c-4999-9956-b55c2f37c6db.mp4
 
 Textured Trees 115200  (60fps all chunks) (8x8 chunks)
+
 https://user-images.githubusercontent.com/14301446/186662761-832b57ed-8096-487a-9d6f-ad7eb15ddc35.mp4
 
 My pc:
