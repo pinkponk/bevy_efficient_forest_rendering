@@ -78,7 +78,7 @@ fn main() {
             position: WindowPosition::At(vec2(1450., 550.0)),
             width: 1000.0,
             height: 1000.0,
-            // present_mode: PresentMode::AutoNoVsync, //Dont cap at 60 fps
+            present_mode: bevy::window::PresentMode::AutoNoVsync, //Dont cap at 60 fps
             ..default()
         })
         .insert_resource(ClearColor(Color::rgb(0.7, 0.8, 0.8)))
@@ -223,7 +223,8 @@ fn setup(
         .unwrap();
 
     let nr_instances = (CHUNK_SIZE * CHUNK_SIZE * INSTANCE_DENSITY as f32) as u32;
-
+    let mut tot_instances = 0;
+    let mut tot_instances_grass = 0;
     for (chunk_x, chunk_y) in (0..NR_SIDE_CHUNKS).cartesian_product(0..NR_SIDE_CHUNKS) {
         let chunk_x_pos = chunk_x as f32 * CHUNK_SIZE - CHUNK_SIZE * NR_SIDE_CHUNKS as f32 / 2.0;
         let chunk_y_pos = chunk_y as f32 * CHUNK_SIZE - CHUNK_SIZE * NR_SIDE_CHUNKS as f32 / 2.0;
@@ -245,6 +246,7 @@ fn setup(
             distance_culling: DistanceCulling { distance: 100.0 },
             ..default()
         });
+        tot_instances += nr_instances / 5;
 
         commands.spawn_bundle(ChunkInstancingBundle {
             transform: Transform::from_xyz(chunk_x_pos, chunk_y_pos, 0.0),
@@ -263,6 +265,7 @@ fn setup(
             distance_culling: DistanceCulling { distance: 600.0 },
             ..default()
         });
+        tot_instances += nr_instances / 15;
 
         commands.spawn_bundle(ChunkInstancingBundle {
             transform: Transform::from_xyz(chunk_x_pos, chunk_y_pos, 0.0),
@@ -281,6 +284,7 @@ fn setup(
             distance_culling: DistanceCulling { distance: 200.0 },
             ..default()
         });
+        tot_instances += nr_instances / 6;
 
         commands.spawn_bundle(ChunkInstancingBundle {
             transform: Transform::from_xyz(chunk_x_pos, chunk_y_pos, 0.0),
@@ -299,6 +303,7 @@ fn setup(
             distance_culling: DistanceCulling { distance: 200.0 },
             ..default()
         });
+        tot_instances += nr_instances / 10;
 
         commands.spawn_bundle(ChunkGrassBundle {
             transform: Transform::from_xyz(chunk_x_pos, chunk_y_pos, 0.0),
@@ -328,7 +333,10 @@ fn setup(
             distance_culling: DistanceCulling { distance: 300.0 },
             ..default()
         });
+        tot_instances_grass += nr_instances * 50;
     }
+    info!("Total instanced objects {:?}", tot_instances);
+    info!("Total grass straws {:?}", tot_instances_grass);
 
     // Camera
     commands
