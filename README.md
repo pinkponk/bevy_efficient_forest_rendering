@@ -1,7 +1,10 @@
 # bevy_efficient_forest_example
+
 Using bevy and custom render pipelines in order to render many objects in a forest using chunks for performance. Grass is rendered efficiently by not sending loads of data to the gpu but instead randomizing everything on the shader. The trees and the other objects are rendered using gpu instancing. 
 
 I could render 10 million grass straws at 70fps on my gaming pc using this approach. No one should need to render this much grass but it's good to know one can :)
+
+I'm making a game for the web in which you have to code the behavior of forest animals in order to balance an ecosystem. Follow my devlogs if you are interested: https://www.youtube.com/channel/UCqzbiRaNXJa50J4kvJvKpAg
 
 Compatible Bevy versions:
 - Bevy 0.8
