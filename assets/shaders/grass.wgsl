@@ -213,14 +213,14 @@ fn vertex(vertex: Vertex,
     let time_wave_y = sin(material.time * freq + base_position.y);
     var amp = .2*out.world_position.z;
     var perl_freq = 10.0;
-    var perl_noise_x = perlinNoise3(vec3<f32>(base_position.x*perl_freq+time_wave_x, base_position.y*perl_freq, out.world_position.z*perl_freq))*amp;
-    var perl_noise_y = perlinNoise3(vec3<f32>(base_position.x*perl_freq, base_position.y*perl_freq+time_wave_y, out.world_position.z*perl_freq))*amp;
+    var perl_noise_x = perlinNoise3(vec3<f32>(base_position.x*perl_freq+time_wave_x, base_position.y*perl_freq, vertex.position.z*perl_freq))*amp;
+    var perl_noise_y = perlinNoise3(vec3<f32>(base_position.x*perl_freq, base_position.y*perl_freq+time_wave_y, vertex.position.z*perl_freq))*amp;
 
 
     //Grass height noise (Might not be needed)
     var amp = 0.3;
     var freq = 0.2;
-    var perl_noise_height = perlinNoise3(vec3<f32>(out.world_position.x*freq, out.world_position.y*freq, out.world_position.z*freq/10.0))*amp*out.world_position.z;
+    var perl_noise_height = perlinNoise3(vec3<f32>(out.world_position.x*freq, out.world_position.y*freq, vertex.position.z*freq/10.0))*amp*out.world_position.z;
 
     out.world_position = vec4<f32>(out.world_position.x+perl_noise_x, out.world_position.y+perl_noise_y, out.world_position.z+perl_noise_height, out.world_position.w);
 

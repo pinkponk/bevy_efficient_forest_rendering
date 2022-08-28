@@ -1,5 +1,6 @@
 [package]
 name = "bevy_efficient_forest_rendering"
+authors = ["Pinkponk <henrik.djurestal@gmail.com>"]
 version = "0.1.0"
 edition = "2021"
 

@@ -16,8 +16,8 @@ use bevy::{
             SetItemPipeline, TrackedRenderPass,
         },
         render_resource::*,
-        renderer::{RenderDevice, RenderQueue},
-        texture::{ImageSampler, TextureFormatPixelInfo},
+        renderer::RenderDevice,
+        texture::ImageSampler,
         view::{ExtractedView, Msaa},
     },
     render::{
@@ -33,7 +33,7 @@ use noise::{NoiseFn, Perlin, Seedable};
 
 use crate::camera::orbit::OrbitCamera;
 
-use super::DistanceCulling;
+use super::{Chunk, DistanceCulling};
 
 //Bundle
 #[derive(Bundle, Debug, Default)]
@@ -48,8 +48,9 @@ pub struct ChunkGrassBundle {
     pub global_transform: GlobalTransform,
     pub mesh_handle: Handle<Mesh>,
     pub aabb: Aabb,
-    pub chunk: ChunkGrass,
+    pub chunk_grass: ChunkGrass,
     pub distance_culling: DistanceCulling,
+    pub chunk: Chunk,
 }
 
 fn update_time_for_custom_material(mut grass_chunks: Query<&mut ChunkGrass>, time: Res<Time>) {
@@ -60,7 +61,7 @@ fn update_time_for_custom_material(mut grass_chunks: Query<&mut ChunkGrass>, tim
 
 fn grass_chunk_distance_culling(
     mut query: Query<(&Transform, &mut Visibility, &DistanceCulling)>,
-    query_camera: Query<&Transform, With<OrbitCamera>>,
+    query_camera: Query<&Transform, With<Camera>>,
 ) {
     if let Ok(camera_pos) = query_camera.get_single() {
         for (transform, mut visability, distance_culling) in query.iter_mut() {
@@ -129,13 +130,13 @@ impl Plugin for ChunkGrassPlugin {
     }
 }
 
-#[derive(Clone, Component)]
+#[derive(Clone, Component, Default)]
 pub struct GrowthTextures {
-    pub growth_texture_array: Image, //Might be better to use Handle here or RenderAsset. Dont understand RenderAsset. Not sure
+    pub growth_texture_array_handle: Option<Handle<Image>>,
 }
 
 impl GrowthTextures {
-    pub fn new() -> Self {
+    pub fn new(images: &mut ResMut<Assets<Image>>) -> Self {
         let size = 100;
         let scale = 255.0;
         let mut data = Vec::new();
@@ -166,7 +167,7 @@ impl GrowthTextures {
         );
 
         Self {
-            growth_texture_array: image,
+            growth_texture_array_handle: Some(images.add(image)),
         }
     }
 }
@@ -341,76 +342,32 @@ pub struct GrowthTexturesBindGroup {
 pub fn prepare_growth_textures_bind_group(
     render_device: Res<RenderDevice>,
     custom_pipeline: Res<CustomPipeline>,
-    render_queue: Res<RenderQueue>,
     mut growth_textures_bind_group: ResMut<GrowthTexturesBindGroup>,
     growth_textures: Res<GrowthTextures>,
+    images: Res<RenderAssets<Image>>,
 ) {
-    let image = &growth_textures.growth_texture_array;
+    if let Some(image_handle) = growth_textures.growth_texture_array_handle.as_ref() {
+        if let Some(image) = images.get(&image_handle.clone_weak()) {
+            let growth_texture_bind_group = render_device.create_bind_group(&BindGroupDescriptor {
+                layout: &custom_pipeline.growth_bind_group_layout,
+                entries: &[
+                    BindGroupEntry {
+                        binding: 0,
+                        resource: BindingResource::TextureView(&image.texture_view),
+                    },
+                    BindGroupEntry {
+                        binding: 1,
+                        resource: BindingResource::Sampler(
+                            &render_device.create_sampler(&ImageSampler::linear_descriptor()),
+                        ),
+                    },
+                ],
+                label: Some("growth_texture_bind_group"),
+            });
 
-    let texture = render_device.create_texture(&image.texture_descriptor);
-    // let sampler = match &image.sampler_descriptor {
-    //     ImageSampler::Default => (**default_sampler).clone(),
-    //     ImageSampler::Descriptor(descriptor) => render_device.create_sampler(&descriptor),
-    // };
-
-    let format_size = image.texture_descriptor.format.pixel_size();
-    render_queue.write_texture(
-        ImageCopyTexture {
-            texture: &texture,
-            mip_level: 0,
-            origin: Origin3d::ZERO,
-            aspect: TextureAspect::All,
-        },
-        &image.data,
-        ImageDataLayout {
-            offset: 0,
-            bytes_per_row: Some(
-                std::num::NonZeroU32::new(image.texture_descriptor.size.width * format_size as u32)
-                    .unwrap(),
-            ),
-            // rows_per_image: None, //std::num::NonZeroU32::new(image.texture_descriptor.size.width), //Not to sure about this
-            rows_per_image: std::num::NonZeroU32::new(image.texture_descriptor.size.width), //Not to sure about this
-        },
-        image.texture_descriptor.size,
-    );
-
-    // let texture_view = TextureViewDescriptor {
-    //     dimension: Some(TextureViewDimension::D2),
-    //     ..default()
-    // };
-    // let texture_view = texture.create_view(&texture_view);
-    let texture_view = texture.create_view(&TextureViewDescriptor::default());
-
-    //     GpuImage {
-    //         texture,
-    //         texture_view,
-    //         texture_format: image.texture_descriptor.format,
-    //         sampler,
-    //         size: Vec2::new(
-    //             image.texture_descriptor.size.width as f32,
-    //             image.texture_descriptor.size.height as f32,
-    //         ),
-    //     }
-    // };
-
-    let growth_texture_bind_group = render_device.create_bind_group(&BindGroupDescriptor {
-        layout: &custom_pipeline.growth_bind_group_layout,
-        entries: &[
-            BindGroupEntry {
-                binding: 0,
-                resource: BindingResource::TextureView(&texture_view),
-            },
-            BindGroupEntry {
-                binding: 1,
-                resource: BindingResource::Sampler(
-                    &render_device.create_sampler(&ImageSampler::linear_descriptor()),
-                ),
-            },
-        ],
-        label: Some("growth_texture_bind_group"),
-    });
-
-    growth_textures_bind_group.as_mut().bind_group = Some(growth_texture_bind_group);
+            growth_textures_bind_group.as_mut().bind_group = Some(growth_texture_bind_group);
+        }
+    }
 }
 
 #[derive(Default)]
@@ -484,6 +441,7 @@ fn queue_custom_pipeline(
     meshes: Res<RenderAssets<Mesh>>,
     material_meshes: Query<(Entity, &MeshUniform, &Handle<Mesh>), With<ChunkGrass>>,
     mut views: Query<(&ExtractedView, &mut RenderPhase<Transparent3d>)>,
+    growth_textures: Res<GrowthTextures>,
 ) {
     let draw_custom = transparent_3d_draw_functions
         .read()
@@ -496,17 +454,20 @@ fn queue_custom_pipeline(
         let rangefinder = view.rangefinder3d();
         for (entity, mesh_uniform, mesh_handle) in &material_meshes {
             if let Some(mesh) = meshes.get(mesh_handle) {
-                let key =
-                    msaa_key | MeshPipelineKey::from_primitive_topology(mesh.primitive_topology);
-                let pipeline = pipelines
-                    .specialize(&mut pipeline_cache, &custom_pipeline, key, &mesh.layout)
-                    .unwrap();
-                transparent_phase.add(Transparent3d {
-                    entity,
-                    pipeline,
-                    draw_function: draw_custom,
-                    distance: rangefinder.distance(&mesh_uniform.transform),
-                });
+                //Only render stuff if there is a texture handle
+                if growth_textures.growth_texture_array_handle.is_some() {
+                    let key = msaa_key
+                        | MeshPipelineKey::from_primitive_topology(mesh.primitive_topology);
+                    let pipeline = pipelines
+                        .specialize(&mut pipeline_cache, &custom_pipeline, key, &mesh.layout)
+                        .unwrap();
+                    transparent_phase.add(Transparent3d {
+                        entity,
+                        pipeline,
+                        draw_function: draw_custom,
+                        distance: rangefinder.distance(&mesh_uniform.transform),
+                    });
+                }
             }
         }
     }
@@ -691,12 +652,11 @@ impl<const I: usize> EntityRenderCommand for SetGrowthTexturesBindGroup<I> {
         bind_group_res: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        pass.set_bind_group(
-            I,
-            &bind_group_res.into_inner().bind_group.as_ref().unwrap(),
-            &[],
-        );
-        RenderCommandResult::Success
+        if let Some(bindgroup) = bind_group_res.into_inner().bind_group.as_ref() {
+            pass.set_bind_group(I, bindgroup, &[]);
+            return RenderCommandResult::Success;
+        }
+        RenderCommandResult::Failure
     }
 }
 

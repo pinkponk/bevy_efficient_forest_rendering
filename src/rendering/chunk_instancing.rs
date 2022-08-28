@@ -22,7 +22,7 @@ use rand::Rng;
 
 use crate::camera::orbit::OrbitCamera;
 
-use super::DistanceCulling;
+use super::{Chunk, DistanceCulling};
 
 //Bundle
 #[derive(Bundle, Debug, Default)]
@@ -37,13 +37,14 @@ pub struct ChunkInstancingBundle {
     pub global_transform: GlobalTransform,
     pub mesh_handle: Handle<Mesh>,
     pub aabb: Aabb,
-    pub chunk: ChunkInstancing,
+    pub chunk_instancing: ChunkInstancing,
     pub distance_culling: DistanceCulling,
+    pub chunk: Chunk,
 }
 
 fn chunk_distance_culling(
     mut query: Query<(&Transform, &mut Visibility, &DistanceCulling)>,
-    query_camera: Query<&Transform, With<OrbitCamera>>,
+    query_camera: Query<&Transform, With<Camera>>,
 ) {
     if let Ok(camera_pos) = query_camera.get_single() {
         for (transform, mut visability, distance_culling) in query.iter_mut() {
@@ -59,7 +60,6 @@ fn chunk_distance_culling(
 #[derive(Clone, Debug)]
 pub struct Instance {
     pub pos_xyz: [f32; 4],
-    pub rot_xyzw: [f32; 4],
 }
 
 #[derive(Component, Clone, Debug, Default)]
@@ -82,11 +82,9 @@ impl ChunkInstancing {
             let x = rng.gen::<f32>() * chunk_size;
             let y = rng.gen::<f32>() * chunk_size;
             let scale = rng.gen::<f32>() * 0.5 + 0.5;
-            let rot_z = (rng.gen::<f32>() * 360.0).to_radians();
 
             instances.push(Instance {
                 pos_xyz: [x, y, 0.0, scale],
-                rot_xyzw: [90_f32.to_radians(), 0.0, rot_z, 0.0],
             });
         }
 

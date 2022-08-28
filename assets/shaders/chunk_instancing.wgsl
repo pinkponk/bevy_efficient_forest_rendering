@@ -56,10 +56,10 @@ fn vertex(vertex: Vertex,
     var out: VertexOutput;
     out.uv = vertex.uv;
 
-    let rand_scale = rand(vec2<f32>(f32(vertex.instance_index), 42.546*sin(f32(vertex.instance_index))), 3.0)*0.2+0.9;
+    let rand_scale = rand(vec2<f32>(instance.xyz.y, 42.546*sin(instance.xyz.x)), 3.0)*0.2+0.9;
     let transformed_position = plant_chunk.model_transform*vec4<f32>(vertex.position, 1.0)*instance.xyz.w*rand_scale;
 
-    let rot_z = rand(vec2<f32>(f32(vertex.instance_index), 10.1512515*cos(f32(vertex.instance_index))), 1.0)*3.1415*2.0;
+    let rot_z = rand(vec2<f32>(instance.xyz.x, 10.1512515*cos(instance.xyz.y)), 1.0)*3.1415*2.0;
 
     let rot_mat = mat2x2<f32>(vec2<f32>(cos(rot_z), -sin(rot_z)), vec2<f32>(sin(rot_z), cos(rot_z)));
     let rotated_xy = rot_mat*transformed_position.xy;

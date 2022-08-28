@@ -23,7 +23,7 @@ use bevy_efficient_forest_rendering::{
             GrowthTextures,
         },
         chunk_instancing::{ChunkInstancing, ChunkInstancingBundle, ChunkInstancingPlugin},
-        DistanceCulling,
+        Chunk, DistanceCulling,
     },
 };
 
@@ -90,7 +90,7 @@ fn main() {
         .add_plugin(OrbitCameraPlugin)
         .add_plugin(LogDiagnosticsPlugin::default())
         .add_plugin(FrameTimeDiagnosticsPlugin::default())
-        .insert_resource(GrowthTextures::new())
+        .insert_resource(GrowthTextures::default())
         .insert_resource(GridConfig {
             grid_center_xy: [0.0, 0.0],
             grid_half_extents: [
@@ -114,7 +114,11 @@ fn setup(
     mut images: ResMut<Assets<Image>>,
     mut meshes: ResMut<Assets<Mesh>>,
     grid_config: Res<GridConfig>,
+    mut growth_texture: ResMut<GrowthTextures>,
 ) {
+    //Growth Textures
+    *growth_texture = GrowthTextures::new(&mut images);
+
     //light
     // commands.insert_resource(AmbientLight {
     //     color: Color::WHITE,
@@ -228,6 +232,9 @@ fn setup(
     for (chunk_x, chunk_y) in (0..NR_SIDE_CHUNKS).cartesian_product(0..NR_SIDE_CHUNKS) {
         let chunk_x_pos = chunk_x as f32 * CHUNK_SIZE - CHUNK_SIZE * NR_SIDE_CHUNKS as f32 / 2.0;
         let chunk_y_pos = chunk_y as f32 * CHUNK_SIZE - CHUNK_SIZE * NR_SIDE_CHUNKS as f32 / 2.0;
+        let chunk = Chunk {
+            chunk_xy: [chunk_x, chunk_y],
+        };
 
         commands.spawn_bundle(ChunkInstancingBundle {
             transform: Transform::from_xyz(chunk_x_pos, chunk_y_pos, 0.0),
@@ -236,13 +243,14 @@ fn setup(
                 center: Vec3A::ZERO,
                 half_extents: Vec3A::new(CHUNK_SIZE, CHUNK_SIZE, 0.0), //Why do I need full chunk_size here?!
             },
-            chunk: ChunkInstancing::new(
+            chunk_instancing: ChunkInstancing::new(
                 nr_instances / 5,
                 mushroom_texture.clone(),
                 Transform::from_rotation(Quat::from_rotation_x(90_f32.to_radians()))
                     .with_scale(Vec3::splat(0.05)),
                 CHUNK_SIZE,
             ),
+            chunk: chunk.clone(),
             distance_culling: DistanceCulling { distance: 100.0 },
             ..default()
         });
@@ -255,13 +263,14 @@ fn setup(
                 center: Vec3A::ZERO,
                 half_extents: Vec3A::new(CHUNK_SIZE, CHUNK_SIZE, 0.0), //Why do I need full chunk_size here?!
             },
-            chunk: ChunkInstancing::new(
+            chunk_instancing: ChunkInstancing::new(
                 nr_instances / 15,
                 tree_texture.clone(),
                 Transform::from_rotation(Quat::from_rotation_x(0_f32.to_radians()))
                     .with_scale(Vec3::splat(0.2)),
                 CHUNK_SIZE,
             ),
+            chunk: chunk.clone(),
             distance_culling: DistanceCulling { distance: 600.0 },
             ..default()
         });
@@ -274,13 +283,14 @@ fn setup(
                 center: Vec3A::ZERO,
                 half_extents: Vec3A::new(CHUNK_SIZE, CHUNK_SIZE, 0.0), //Why do I need full chunk_size here?!
             },
-            chunk: ChunkInstancing::new(
+            chunk_instancing: ChunkInstancing::new(
                 nr_instances / 6,
                 bush_texture.clone(),
                 Transform::from_rotation(Quat::from_rotation_x(0_f32.to_radians()))
                     .with_scale(Vec3::splat(0.4)),
                 CHUNK_SIZE,
             ),
+            chunk: chunk.clone(),
             distance_culling: DistanceCulling { distance: 200.0 },
             ..default()
         });
@@ -293,13 +303,14 @@ fn setup(
                 center: Vec3A::ZERO,
                 half_extents: Vec3A::new(CHUNK_SIZE, CHUNK_SIZE, 0.0), //Why do I need full chunk_size here?!
             },
-            chunk: ChunkInstancing::new(
+            chunk_instancing: ChunkInstancing::new(
                 nr_instances / 10,
                 rock_texture.clone(),
                 Transform::from_rotation(Quat::from_rotation_x(0_f32.to_radians()))
                     .with_scale(Vec3::splat(0.6)),
                 CHUNK_SIZE,
             ),
+            chunk: chunk.clone(),
             distance_culling: DistanceCulling { distance: 200.0 },
             ..default()
         });
@@ -312,7 +323,7 @@ fn setup(
                 center: Vec3A::ZERO,
                 half_extents: Vec3A::new(CHUNK_SIZE, CHUNK_SIZE, 0.0), //Why do I need full chunk_size here?!
             },
-            chunk: ChunkGrass {
+            chunk_grass: ChunkGrass {
                 time: 0.0,
                 // healthy_tip_color: *[Color::ANTIQUE_WHITE, Color::RED].choose(&mut rand::thread_rng()).unwrap(),
                 healthy_tip_color: Color::rgb(0.66, 0.79 + 0.2, 0.34), //Color::rgb(0.95, 0.91, 0.81),
@@ -330,6 +341,7 @@ fn setup(
                 scale: 1.6,
                 height_modifier: 0.6,
             },
+            chunk: chunk.clone(),
             distance_culling: DistanceCulling { distance: 300.0 },
             ..default()
         });

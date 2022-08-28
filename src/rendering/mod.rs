@@ -13,3 +13,8 @@ impl Default for DistanceCulling {
         Self { distance: 1000.0 }
     }
 }
+
+#[derive(Component, Default, Debug, Clone)]
+pub struct Chunk {
+    pub chunk_xy: [u32; 2],
+}
