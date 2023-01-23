@@ -188,9 +188,14 @@ fn vertex(vertex: Vertex,
     out.world_position.z = out.world_position.z*growth;
 
     // "Hide" grass under map (This can be done better, probably by sampling 5x times and adjusting nr_instances based on texture sum over chunk)
+    // Randomaly hide some in order to get a smooth transition from grass to ground
     if growth<0.5 && growth/0.5<rand(vec2<f32>(f32(vertex.instance_index), 18.956724*cos(f32(vertex.instance_index)*2.9515))){
-        out.world_position.z = out.world_position.z+(-10.0);
-        out.clip_position = mesh_position_world_to_clip(out.world_position);
+        // Hide under map:
+        // out.world_position.z = out.world_position.z+(-10.0);
+        // out.clip_position = mesh_position_world_to_clip(out.world_position);
+
+        // Remove from view: (no perforamance gain compared to hiding under map)
+        out.clip_position = vec4<f32>(-2.0,-2.0,-2.0,-2.0);
         return out;
     } 
 

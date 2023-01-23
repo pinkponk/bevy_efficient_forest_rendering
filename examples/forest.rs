@@ -90,14 +90,6 @@ fn main() {
         .add_plugin(OrbitCameraPlugin)
         .add_plugin(LogDiagnosticsPlugin::default())
         .add_plugin(FrameTimeDiagnosticsPlugin::default())
-        .insert_resource(GrowthTextures::default())
-        .insert_resource(GridConfig {
-            grid_center_xy: [0.0, 0.0],
-            grid_half_extents: [
-                NR_SIDE_CHUNKS as f32 * CHUNK_SIZE / 2.0,
-                NR_SIDE_CHUNKS as f32 * CHUNK_SIZE / 2.0,
-            ],
-        })
         .add_plugin(ChunkInstancingPlugin)
         .add_plugin(ChunkGrassPlugin)
         .add_enter_system(GameState::InGame, setup)
@@ -113,9 +105,18 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut images: ResMut<Assets<Image>>,
     mut meshes: ResMut<Assets<Mesh>>,
-    grid_config: Res<GridConfig>,
+    mut grid_config: ResMut<GridConfig>,
     mut growth_texture: ResMut<GrowthTextures>,
 ) {
+    //Set map size
+    *grid_config = GridConfig {
+        grid_center_xy: [0.0, 0.0],
+        grid_half_extents: [
+            NR_SIDE_CHUNKS as f32 * CHUNK_SIZE / 2.0,
+            NR_SIDE_CHUNKS as f32 * CHUNK_SIZE / 2.0,
+        ],
+    };
+
     //Growth Textures
     *growth_texture = GrowthTextures::new(&mut images);
 

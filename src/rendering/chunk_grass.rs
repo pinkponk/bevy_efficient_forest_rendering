@@ -31,8 +31,6 @@ use bytemuck::{Pod, Zeroable};
 
 use noise::{NoiseFn, Perlin, Seedable};
 
-use crate::camera::orbit::OrbitCamera;
-
 use super::{Chunk, DistanceCulling};
 
 //Bundle
@@ -114,6 +112,8 @@ impl Plugin for ChunkGrassPlugin {
         app.add_plugin(ExtractComponentPlugin::<ChunkGrass>::extract_visible());
         app.add_plugin(ExtractResourcePlugin::<GrowthTextures>::default());
         app.add_plugin(ExtractResourcePlugin::<GridConfig>::default());
+        app.insert_resource(GridConfig::default());
+        app.insert_resource(GrowthTextures::default());
         app.add_system(update_time_for_custom_material);
         app.add_system(grass_chunk_distance_culling);
 
@@ -150,6 +150,7 @@ impl GrowthTextures {
                     let noise =
                         perlin.get([x as f64 * pattern_scale, y as f64 * pattern_scale]) as f32;
                     let value = (noise + 1.0) / 2.0 * scale;
+                    // value = (value - 100.0).max(0.0); //Truncate short grass to 0.0
                     data.push(value as u8)
                 }
             }
@@ -172,7 +173,7 @@ impl GrowthTextures {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct GridConfig {
     pub grid_center_xy: [f32; 2], //Assume axis aligned grid otherwise need to calc homogenous coordinate matrix
     pub grid_half_extents: [f32; 2],
@@ -397,7 +398,7 @@ fn prepare_grid_config_bind_group(
     grid_config: Res<GridConfig>,
     custom_pipeline: Res<CustomPipeline>,
 ) {
-    if !grid_config_bind_group_res.grid_config_bind_group.is_some() {
+    if grid_config.is_changed() {
         let grid_config_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
             label: Some("grid_config_buffer"),
             contents: bytemuck::cast_slice(&[grid_config.to_raw()]),
