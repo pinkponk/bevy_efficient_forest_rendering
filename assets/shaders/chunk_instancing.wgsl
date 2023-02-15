@@ -1,3 +1,4 @@
+
 #import bevy_pbr::mesh_types
 #import bevy_pbr::mesh_view_bindings
 
@@ -7,7 +8,8 @@ var<uniform> mesh: Mesh;
 // NOTE: Bindings must come before functions that use them!
 #import bevy_pbr::mesh_functions
 
-#import bevy_pbr::pbr_types
+#import bevy_pbr::pbr_bindings
+
 #import bevy_pbr::utils
 #import bevy_pbr::clustered_forward
 #import bevy_pbr::lighting
@@ -89,6 +91,7 @@ var diffuse_sampler: sampler;
 
 
 
+
 struct FragmentInput {
     @builtin(front_facing) is_front: bool,
     @builtin(position) frag_coord: vec4<f32>,
@@ -113,13 +116,12 @@ fn fragment(in: FragmentInput) -> @location(0) vec4<f32> {
 
     pbr_input.is_orthographic = view.projection[3].w == 1.0;
 
-    pbr_input.N = prepare_normal(
+    pbr_input.N = apply_normal_mapping(
         pbr_input.material.flags,
-        in.world_normal,
+        pbr_input.world_normal,
         in.uv,
-        in.is_front,
     );
     pbr_input.V = calculate_view(in.world_position, pbr_input.is_orthographic);
 
-    return tone_mapping(pbr(pbr_input));
+    return pbr(pbr_input);
 }

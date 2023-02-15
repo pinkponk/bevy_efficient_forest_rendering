@@ -1,5 +1,4 @@
 use bevy::{
-    asset::AssetServerSettings,
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     gltf::{Gltf, GltfMesh},
     math::prelude::*,
@@ -39,7 +38,7 @@ pub enum GameState {
     InGame,
 }
 
-#[derive(AssetCollection)]
+#[derive(AssetCollection, Resource)]
 pub struct MyGltfAssets {
     #[asset(path = "mushroom.glb")]
     mushroom: Handle<Gltf>,
@@ -51,7 +50,7 @@ pub struct MyGltfAssets {
     rock: Handle<Gltf>,
 }
 
-#[derive(AssetCollection)]
+#[derive(AssetCollection, Resource)]
 pub struct MyImageAssets {
     #[asset(path = "grass_ground_texture.png")]
     grass: Handle<Image>,
@@ -74,30 +73,27 @@ fn main() {
                 .with_collection::<MyGltfAssets>()
                 .with_collection::<MyImageAssets>(),
         )
-        .insert_resource(WindowDescriptor {
-            position: WindowPosition::At(vec2(1450., 550.0)),
-            width: 1000.0,
-            height: 1000.0,
-            present_mode: bevy::window::PresentMode::AutoNoVsync, //Dont cap at 60 fps
-            ..default()
-        })
+        .add_plugins(
+            DefaultPlugins
+                .set(AssetPlugin {
+                    watch_for_changes: true,
+                    ..default()
+                })
+                .set(WindowPlugin {
+                    window: WindowDescriptor {
+                        position: WindowPosition::At(vec2(1450., 550.0)),
+                        width: 1000.0,
+                        height: 1000.0,
+                        present_mode: bevy::window::PresentMode::AutoNoVsync, //Dont cap at 60 fps
+                        ..default()
+                    },
+                    ..default()
+                }),
+        )
         .insert_resource(ClearColor(Color::rgb(0.7, 0.8, 0.8)))
-        .insert_resource(AssetServerSettings {
-            watch_for_changes: true,
-            ..default()
-        })
-        .add_plugins(DefaultPlugins)
         .add_plugin(OrbitCameraPlugin)
         .add_plugin(LogDiagnosticsPlugin::default())
         .add_plugin(FrameTimeDiagnosticsPlugin::default())
-        .insert_resource(GrowthTextures::default())
-        .insert_resource(GridConfig {
-            grid_center_xy: [0.0, 0.0],
-            grid_half_extents: [
-                NR_SIDE_CHUNKS as f32 * CHUNK_SIZE / 2.0,
-                NR_SIDE_CHUNKS as f32 * CHUNK_SIZE / 2.0,
-            ],
-        })
         .add_plugin(ChunkInstancingPlugin)
         .add_plugin(ChunkGrassPlugin)
         .add_enter_system(GameState::InGame, setup)
@@ -113,9 +109,18 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut images: ResMut<Assets<Image>>,
     mut meshes: ResMut<Assets<Mesh>>,
-    grid_config: Res<GridConfig>,
+    mut grid_config: ResMut<GridConfig>,
     mut growth_texture: ResMut<GrowthTextures>,
 ) {
+    //Set map size
+    *grid_config = GridConfig {
+        grid_center_xy: [0.0, 0.0],
+        grid_half_extents: [
+            NR_SIDE_CHUNKS as f32 * CHUNK_SIZE / 2.0,
+            NR_SIDE_CHUNKS as f32 * CHUNK_SIZE / 2.0,
+        ],
+    };
+
     //Growth Textures
     *growth_texture = GrowthTextures::new(&mut images);
 
@@ -124,7 +129,7 @@ fn setup(
     //     color: Color::WHITE,
     //     brightness: 3.05,
     // });
-    commands.spawn_bundle(DirectionalLightBundle {
+    commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             illuminance: 30000.0,
             shadows_enabled: false, //Weird things happen
@@ -161,7 +166,7 @@ fn setup(
 
     // Ground
     commands
-        .spawn_bundle(PbrBundle {
+        .spawn(PbrBundle {
             transform: Transform {
                 translation: (Vec3::new(0., 0., 0.)),
                 rotation: Quat::from_rotation_x(0.0_f32.to_radians()),
@@ -236,7 +241,7 @@ fn setup(
             chunk_xy: [chunk_x, chunk_y],
         };
 
-        commands.spawn_bundle(ChunkInstancingBundle {
+        commands.spawn(ChunkInstancingBundle {
             transform: Transform::from_xyz(chunk_x_pos, chunk_y_pos, 0.0),
             mesh_handle: mushroom_mesh_handle.clone(),
             aabb: Aabb {
@@ -256,7 +261,7 @@ fn setup(
         });
         tot_instances += nr_instances / 5;
 
-        commands.spawn_bundle(ChunkInstancingBundle {
+        commands.spawn(ChunkInstancingBundle {
             transform: Transform::from_xyz(chunk_x_pos, chunk_y_pos, 0.0),
             mesh_handle: tree_mesh_handle.clone(),
             aabb: Aabb {
@@ -276,7 +281,7 @@ fn setup(
         });
         tot_instances += nr_instances / 15;
 
-        commands.spawn_bundle(ChunkInstancingBundle {
+        commands.spawn(ChunkInstancingBundle {
             transform: Transform::from_xyz(chunk_x_pos, chunk_y_pos, 0.0),
             mesh_handle: bush_mesh_handle.clone(),
             aabb: Aabb {
@@ -296,7 +301,7 @@ fn setup(
         });
         tot_instances += nr_instances / 6;
 
-        commands.spawn_bundle(ChunkInstancingBundle {
+        commands.spawn(ChunkInstancingBundle {
             transform: Transform::from_xyz(chunk_x_pos, chunk_y_pos, 0.0),
             mesh_handle: rock_mesh_handle.clone(),
             aabb: Aabb {
@@ -316,7 +321,7 @@ fn setup(
         });
         tot_instances += nr_instances / 10;
 
-        commands.spawn_bundle(ChunkGrassBundle {
+        commands.spawn(ChunkGrassBundle {
             transform: Transform::from_xyz(chunk_x_pos, chunk_y_pos, 0.0),
             mesh_handle: meshes.add(get_grass_straw_mesh()),
             aabb: Aabb {
@@ -352,7 +357,7 @@ fn setup(
 
     // Camera
     commands
-        .spawn_bundle(Camera3dBundle {
+        .spawn(Camera3dBundle {
             ..Default::default()
         })
         .insert(OrbitCamera {

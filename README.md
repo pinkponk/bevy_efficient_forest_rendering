@@ -9,7 +9,8 @@ Rendering the grass with with the optimized grass renderer instead of the more g
 I'm making a game for the web in which you have to code the behavior of forest animals in order to balance an ecosystem. Follow my devlogs if you are interested: https://www.youtube.com/channel/UCqzbiRaNXJa50J4kvJvKpAg
 
 Compatible Bevy versions:
-- Bevy 0.8
+- Bevy 0.9 (main)
+- Bevy 0.8 (branch bevy-0.8.1 or tag v0.1.0)
 
 Forest:
 Total instanced objects 192_000 (Not all visable at once, culling)
