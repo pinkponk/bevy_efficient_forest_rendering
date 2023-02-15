@@ -360,6 +360,7 @@ fn queue_custom(
 // █░░░░░░█████████░░░░░░░░░░█░░░░░░█████████░░░░░░░░░░░░░░█░░░░░░░░░░░░░░█░░░░░░░░░░█░░░░░░██████████░░░░░░█░░░░░░░░░░░░░░█
 // █████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████
 
+#[derive(Resource)]
 pub struct CustomPipeline {
     shader: Handle<Shader>,
     mesh_pipeline: MeshPipeline,
@@ -413,7 +414,7 @@ impl FromWorld for CustomPipeline {
             });
 
         let asset_server = world.resource::<AssetServer>();
-        asset_server.watch_for_changes().unwrap();
+        // asset_server.watch_for_changes().unwrap();
         let shader = asset_server.load("shaders/chunk_instancing.wgsl");
 
         let mesh_pipeline = world.resource::<MeshPipeline>();

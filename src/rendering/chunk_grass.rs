@@ -29,7 +29,7 @@ use bevy::{
 };
 use bytemuck::{Pod, Zeroable};
 
-use noise::{NoiseFn, Perlin, Seedable};
+use noise::{NoiseFn, Perlin};
 
 use super::{Chunk, DistanceCulling};
 
@@ -53,7 +53,7 @@ pub struct ChunkGrassBundle {
 
 fn update_time_for_custom_material(mut grass_chunks: Query<&mut ChunkGrass>, time: Res<Time>) {
     for mut grass_chunk in grass_chunks.iter_mut() {
-        grass_chunk.time = time.seconds_since_startup() as f32;
+        grass_chunk.time = time.elapsed_seconds();
     }
 }
 
@@ -130,7 +130,7 @@ impl Plugin for ChunkGrassPlugin {
     }
 }
 
-#[derive(Clone, Component, Default)]
+#[derive(Clone, Component, Default, Resource)]
 pub struct GrowthTextures {
     pub growth_texture_array_handle: Option<Handle<Image>>,
 }
@@ -143,7 +143,7 @@ impl GrowthTextures {
         let pattern_scale = 0.1;
         let nr_textures = 2;
         for i in 0..nr_textures {
-            let perlin = Perlin::new().set_seed(i + 1); // from -1 to 1
+            let perlin = Perlin::new(i + 1); // from -1 to 1
 
             for y in 0..size {
                 for x in 0..size {
@@ -173,7 +173,7 @@ impl GrowthTextures {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Resource)]
 pub struct GridConfig {
     pub grid_center_xy: [f32; 2], //Assume axis aligned grid otherwise need to calc homogenous coordinate matrix
     pub grid_half_extents: [f32; 2],
@@ -335,7 +335,7 @@ fn prepare_grass_chunk_bind_group(
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct GrowthTexturesBindGroup {
     pub bind_group: Option<BindGroup>,
 }
@@ -371,7 +371,7 @@ pub fn prepare_growth_textures_bind_group(
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct GridConfigBindGroup {
     pub grid_config_bind_group: Option<BindGroup>,
 }
@@ -488,6 +488,7 @@ fn queue_custom_pipeline(
 // █░░░░░░█████████░░░░░░░░░░█░░░░░░█████████░░░░░░░░░░░░░░█░░░░░░░░░░░░░░█░░░░░░░░░░█░░░░░░██████████░░░░░░█░░░░░░░░░░░░░░█
 // █████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████
 
+#[derive(Resource)]
 pub struct CustomPipeline {
     shader: Handle<Shader>,
     mesh_pipeline: MeshPipeline,
@@ -563,7 +564,7 @@ impl FromWorld for CustomPipeline {
         //grid END
 
         let asset_server = world.resource::<AssetServer>();
-        asset_server.watch_for_changes().unwrap();
+        // asset_server.watch_for_changes().unwrap();
         let shader = asset_server.load("shaders/grass.wgsl");
 
         let mesh_pipeline = world.resource::<MeshPipeline>();
