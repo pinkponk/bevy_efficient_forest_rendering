@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use bevy::{
     asset::ChangeWatcher,
-    diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     gltf::{Gltf, GltfMesh},
     math::prelude::*,
     math::Vec3A,
