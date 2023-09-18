@@ -1,20 +1,11 @@
 
-#import bevy_pbr::mesh_types
-#import bevy_pbr::mesh_view_bindings
-
-@group(1) @binding(0)
-var<uniform> mesh: Mesh;
+#import bevy_pbr::mesh_types Mesh
+#import bevy_pbr::mesh_view_bindings view
+#import bevy_pbr::mesh_bindings mesh
 
 // NOTE: Bindings must come before functions that use them!
-#import bevy_pbr::mesh_functions
-
-#import bevy_pbr::pbr_bindings
-
-#import bevy_pbr::utils
-#import bevy_pbr::clustered_forward
-#import bevy_pbr::lighting
-#import bevy_pbr::shadows
-#import bevy_pbr::pbr_functions
+#import bevy_pbr::mesh_functions as mesh_functions
+#import bevy_pbr::pbr_functions as pbr_functions
 
 struct Vertex {
     @location(0) position: vec3<f32>,
@@ -32,8 +23,8 @@ struct PlantChunk{
     model_transform: mat4x4<f32>
 }
 
- @group(2) @binding(0)
- var<uniform> plant_chunk: PlantChunk;
+@group(3) @binding(0)
+var<uniform> plant_chunk: PlantChunk;
 
 
 struct VertexOutput {
@@ -72,15 +63,15 @@ fn vertex(vertex: Vertex,
     let rotated_normals = rot_mat*transformed_normals.xy;
     let normals= vec3<f32>(rotated_normals.x,rotated_normals.y,transformed_normals.z);
 
-    out.world_position = mesh_position_local_to_world(mesh.model, position);
-    out.world_normal = mesh_normal_local_to_world(normals);
-    out.clip_position = mesh_position_world_to_clip(out.world_position);
+    out.world_position = mesh_functions::mesh_position_local_to_world(mesh.model, position);
+    out.world_normal = mesh_functions::mesh_normal_local_to_world(normals);
+    out.clip_position = mesh_functions::mesh_position_world_to_clip(out.world_position);
     return out;
 }
 
-@group(3) @binding(0)
+@group(4) @binding(0)
 var diffuse_texture: texture_2d<f32>;
-@group(3) @binding(1)
+@group(4) @binding(1)
 var diffuse_sampler: sampler;
 
 // @fragment
@@ -104,7 +95,7 @@ struct FragmentInput {
 fn fragment(in: FragmentInput) -> @location(0) vec4<f32> {
     // Prepare a 'processed' StandardMaterial by sampling all textures to resolve
     // the material members
-    var pbr_input: PbrInput = pbr_input_new();
+    var pbr_input: pbr_functions::PbrInput = pbr_functions::pbr_input_new();
 
     pbr_input.material.base_color = textureSample(diffuse_texture, diffuse_sampler, in.uv);
     pbr_input.material.reflectance = 0.0;
@@ -116,12 +107,16 @@ fn fragment(in: FragmentInput) -> @location(0) vec4<f32> {
 
     pbr_input.is_orthographic = view.projection[3].w == 1.0;
 
-    pbr_input.N = apply_normal_mapping(
+    pbr_input.N = pbr_functions::apply_normal_mapping(
         pbr_input.material.flags,
         pbr_input.world_normal,
         in.uv,
+        view.mip_bias,
     );
-    pbr_input.V = calculate_view(in.world_position, pbr_input.is_orthographic);
+    pbr_input.V = pbr_functions::calculate_view(in.world_position, pbr_input.is_orthographic);
 
-    return pbr(pbr_input);
+    return pbr_functions::pbr(pbr_input);
+
+    // Retrun dummy color
+    // return vec4<f32>(0.5,0.5,0.5,1.0);
 }

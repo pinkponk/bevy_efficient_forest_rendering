@@ -1,12 +1,12 @@
 
-#import bevy_pbr::mesh_types
+#import bevy_pbr::mesh_types Mesh
 #import bevy_pbr::mesh_view_bindings
 
 @group(1) @binding(0)
 var<uniform> mesh: Mesh;
 
 // NOTE: Bindings must come before functions that use them!
-#import bevy_pbr::mesh_functions
+#import bevy_pbr::mesh_functions as mesh_functions
 
 
 
@@ -151,30 +151,79 @@ struct VertexOutput {
 };
 
 
-// [0,1.0]
-fn rand(co: vec2<f32>)-> f32{
-    return fract(sin(dot(co, vec2(12.9898, 78.233))) * 438.5453);
+// // [0,1.0]
+// fn rand(co: vec2<f32>)-> f32{
+//     return fract(sin(fract(dot(co, vec2(13.9898, 7.233)))*4.412495) * 42.5453);
+// }
+
+// Create a function to generate a random float between 0 and 1.
+// Seed should be a float between 0 and 1.
+fn rand1(seed: f32) -> f32 {
+    // Use the fractional part of the seed for initialization.
+    var seedFractional: f32 = fract(seed);
+
+    // Use bitwise operations to scramble the bits of the seed.
+    var seedBits: u32 = u32(seedFractional * 4294967296.0); // Convert to u32
+    
+    seedBits ^= (seedBits << 13u) | (seedBits >> 19u);
+    seedBits ^= (seedBits << 3u)  | (seedBits >> 16u);
+    seedBits ^= (seedBits << 17u) | (seedBits >> 5u);
+    
+    // Convert the scrambled bits to a float between 0 and 1.
+    var value: f32 = f32(seedBits) / 4294967296.0; // 2^32
+    
+    return value;
 }
 
+// Create a function to generate a random float between 0 and 1.
+// Seed should be a float between 0 and 1.
+fn rand2(seed: f32) -> f32 {
+    // Use the fractional part of the seed for initialization.
+    var seedFractional: f32 = fract(seed);
 
+    // Use bitwise operations to scramble the bits of the seed.
+    var seedBits: u32 = u32(seedFractional * 4294967296.0); // Convert to u32
+    
+    seedBits ^= (seedBits << 7u) | (seedBits >> 25u);
+    seedBits ^= (seedBits << 12u)  | (seedBits >> 20u);
+    seedBits ^= (seedBits << 22u) | (seedBits >> 10u);
+    
+    // Convert the scrambled bits to a float between 0 and 1.
+    var value: f32 = f32(seedBits) / 4294967296.0; // 2^32
+    
+    return value;
+}
 
+// Create a function to approximate a square wave.
+fn approximateSquareWave(t: f32, frequency: f32, numHarmonics: i32) -> f32 {
+    var squareWave: f32 = 0.0;
+    
+    for (var i: i32 = 1; i <= numHarmonics; i = i + 2) {
+        squareWave += sin(2.0 * 3.1415 * f32(i) * frequency * t) / f32(i);
+    }
+    
+    return 4.0 / 3.1415 * squareWave;
+}
 
 @vertex
 fn vertex(vertex: Vertex,
 ) -> VertexOutput {
     var out: VertexOutput;
 
+    // Need to divide by a large number to get a float between 0 and 1.
+    // If we get more than a 1 billion instances we will get reapeating random values, e.g the 1 billionth straw will be identical to the first straw
+    // Dividing by 10 billion cause a precision error and the grass looks bad.
+    let v_index_float_fraction = f32(vertex.instance_index)/1000000000.0;
 
-    //Random Base World position
-    // let seed = sqrt(material.chunk_xy.x*material.chunk_xy.y+1.1);
-    let x = (rand(vec2<f32>(sin(f32(vertex.instance_index)), 1.1512515*cos(f32(vertex.instance_index))))*material.chunk_half_extents.x*2.0);
-    let y = (rand(vec2<f32>(0.902415*sin(f32(vertex.instance_index)), cos(f32(vertex.instance_index))))*material.chunk_half_extents.y*2.0);
+
+    let x = (rand1(v_index_float_fraction)*material.chunk_half_extents.x*2.0);
+    let y = (rand2(v_index_float_fraction)*material.chunk_half_extents.y*2.0);
 
     let base_position = vec4<f32>(x,y,0.0,1.0);
-    let base_position_world = mesh_position_local_to_world(mesh.model, base_position);
+    let base_position_world = mesh_functions::mesh_position_local_to_world(mesh.model, base_position);
 
     //Random Rotate
-    let rot_z = (rand(vec2<f32>(12.554215, f32(vertex.instance_index)))*30.1415);
+    let rot_z = (rand1(v_index_float_fraction*0.412516)*2.0*3.1415);
     let rot_mat = mat2x2<f32>(vec2<f32>(cos(rot_z), -sin(rot_z)), vec2<f32>(sin(rot_z), cos(rot_z)));
     let rotated_xy = rot_mat*vertex.position.xy*material.scale_modifier.x;
     let local_z = vertex.position.z*material.scale_modifier.x*material.height_modifier.x;
@@ -189,7 +238,7 @@ fn vertex(vertex: Vertex,
 
     // "Hide" grass under map (This can be done better, probably by sampling 5x times and adjusting nr_instances based on texture sum over chunk)
     // Randomaly hide some in order to get a smooth transition from grass to ground
-    if growth<0.5 && growth/0.5<rand(vec2<f32>(f32(vertex.instance_index), 18.956724*cos(f32(vertex.instance_index)*2.9515))){
+    if growth<0.5 && growth/0.5<rand1(v_index_float_fraction*0.12319217){
         // Hide under map:
         // out.world_position.z = out.world_position.z+(-10.0);
         // out.clip_position = mesh_position_world_to_clip(out.world_position);
@@ -201,40 +250,66 @@ fn vertex(vertex: Vertex,
 
     //Straw distortion
     var scale = 0.1*vertex.position.z*material.height_modifier.x*material.scale_modifier.x;
-    var noise_x = (rand(vec2<f32>(x,y+local_z))+(-0.5))*scale;
-    var noise_y = (rand(vec2<f32>(x,y+local_z))+(-0.5))*scale;
+    var noise_x = (rand1(v_index_float_fraction*0.690981815*local_z)+(-0.5))*scale;
+    var noise_y = (rand2(v_index_float_fraction*0.125908987*local_z)+(-0.5))*scale;
     out.world_position.x = out.world_position.x+noise_x;
     out.world_position.y = out.world_position.y+noise_y;
 
-
-
-    //Wind swing effect
+    // Wind swing effect
     let time_wave = sin(material.time / 1.0 + out.world_position.x/10.0);
     out.world_position.x = out.world_position.x+time_wave*0.4*out.world_position.z;
 
     //Grass turbulance effect
-    let freq = 2.0;
-    let time_wave_x = cos(material.time * freq + base_position.x);
-    let time_wave_y = sin(material.time * freq + base_position.y);
-    var amp = .2*out.world_position.z;
-    var perl_freq = 10.0;
-    var perl_noise_x = perlinNoise3(vec3<f32>(base_position.x*perl_freq+time_wave_x, base_position.y*perl_freq, vertex.position.z*perl_freq))*amp;
-    var perl_noise_y = perlinNoise3(vec3<f32>(base_position.x*perl_freq, base_position.y*perl_freq+time_wave_y, vertex.position.z*perl_freq))*amp;
+    var freq = 2.0;
+    let time_wave_x = cos(material.time * freq + out.world_position.x);
+    let time_wave_y = sin(material.time * freq + out.world_position.y);
+    var amp = .1*out.world_position.z;
+    var perl_freq = 5.1;
+    var perl_noise_x = perlinNoise3(vec3<f32>(out.world_position.x*perl_freq+time_wave_x, out.world_position.y*perl_freq, vertex.position.z*perl_freq))*amp;
+    var perl_noise_y = perlinNoise3(vec3<f32>(out.world_position.x*perl_freq, out.world_position.y*perl_freq+time_wave_y, vertex.position.z*perl_freq))*amp;
 
 
     //Grass height noise (Might not be needed)
-    var amp = 0.3;
-    var freq = 0.2;
+    amp = 0.08;
+    freq = 1.0;
     var perl_noise_height = perlinNoise3(vec3<f32>(out.world_position.x*freq, out.world_position.y*freq, vertex.position.z*freq/10.0))*amp*out.world_position.z;
 
     out.world_position = vec4<f32>(out.world_position.x+perl_noise_x, out.world_position.y+perl_noise_y, out.world_position.z+perl_noise_height, out.world_position.w);
+
+
+
+
+    //Grass gust effect in x direction
+    var freq_gust_speed = 0.7; //Higher value = faster gust
+    var freq_gust_amp = 0.5; //Higher value = faster toggle between gust and no gust
+    var freq_gust_shape = 0.3; //Determines the speed of change of the islands shapes.
+    var gust_amp = 1.4*(sin(material.time*freq_gust_amp)+1.0)+0.1; //Higher value = stronger gust
+    var gust_perl_freq = 0.05; //Determines the size of the gust islands, higher value = smaller islands, also effects the speed of the gust
+    let gust_time_wave = material.time * freq_gust_speed;
+    var perl_noise_gust = perlinNoise3(
+        vec3<f32>(out.world_position.x*gust_perl_freq+gust_time_wave, 
+        out.world_position.y*gust_perl_freq, 
+        abs(sin(material.time*freq_gust_shape))*0.9+0.1));    // Determines the shape of the gust islands over time
+    perl_noise_gust = (perl_noise_gust - 0.4)/2.0*gust_amp; // Clips values in order to create islands from perlin noise
+    if (perl_noise_gust<0.0){
+        perl_noise_gust = 0.0;
+    }
+    //clip the noise to not be larger than the grass height
+    perl_noise_gust = perl_noise_gust*out.world_position.z;
+    if (perl_noise_gust>local_z){
+        perl_noise_gust = local_z;
+    }
+
+    out.world_position = vec4<f32>(out.world_position.x-perl_noise_gust, out.world_position.y, out.world_position.z, out.world_position.w);
+    // Visualize gust effect
+    // out.world_position = vec4<f32>(out.world_position.x, out.world_position.y, perl_noise_gust, out.world_position.w);
+
 
 
     //Color
     let tip_color = mix(material.unhealthy_tip_color, material.healthy_tip_color, growth);
     let middle_color = mix(material.unhealthy_middle_color, material.healthy_middle_color, growth);
     let base_color = mix(material.unhealthy_base_color, material.healthy_base_color, growth);
-
 
 
 
@@ -246,7 +321,9 @@ fn vertex(vertex: Vertex,
         out.color =  base_color;
     }
 
-    out.clip_position = mesh_position_world_to_clip(out.world_position);
+    out.color.z = out.color.z+rand1(v_index_float_fraction*0.12319217)*0.1;
+
+    out.clip_position = mesh_functions::mesh_position_world_to_clip(out.world_position);
 
     return out;
 }

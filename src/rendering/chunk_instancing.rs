@@ -1,6 +1,9 @@
 use bevy::{
     core_pipeline::core_3d::Transparent3d,
-    ecs::system::{lifetimeless::*, SystemParamItem, SystemState},
+    ecs::{
+        query::ROQueryItem,
+        system::{lifetimeless::*, SystemParamItem},
+    },
     pbr::{MeshPipeline, MeshPipelineKey, MeshUniform, SetMeshBindGroup, SetMeshViewBindGroup},
     prelude::*,
     render::{
@@ -8,13 +11,13 @@ use bevy::{
         primitives::Aabb,
         render_asset::RenderAssets,
         render_phase::{
-            AddRenderCommand, DrawFunctions, EntityRenderCommand, RenderCommandResult, RenderPhase,
-            SetItemPipeline, TrackedRenderPass,
+            AddRenderCommand, DrawFunctions, PhaseItem, RenderCommand, RenderCommandResult,
+            RenderPhase, SetItemPipeline, TrackedRenderPass,
         },
         render_resource::*,
         renderer::RenderDevice,
         view::{ComputedVisibility, ExtractedView, Msaa},
-        Extract, RenderApp, RenderStage,
+        Extract, Render, RenderApp, RenderSet,
     },
 };
 
@@ -47,9 +50,9 @@ fn chunk_distance_culling(
     if let Ok(camera_pos) = query_camera.get_single() {
         for (transform, mut visability, distance_culling) in query.iter_mut() {
             if camera_pos.translation.distance(transform.translation) > distance_culling.distance {
-                visability.is_visible = false;
+                *visability = Visibility::Hidden;
             } else {
-                visability.is_visible = true;
+                *visability = Visibility::Visible;
             }
         }
     }
@@ -98,20 +101,39 @@ pub struct ChunkInstancingPlugin;
 
 impl Plugin for ChunkInstancingPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(chunk_distance_culling);
+        app.add_systems(Update, chunk_distance_culling);
 
-        app.sub_app_mut(RenderApp)
+        let render_app = match app.get_sub_app_mut(RenderApp) {
+            Ok(render_app) => render_app,
+            Err(_) => return,
+        };
+
+        render_app
             .add_render_command::<Transparent3d, DrawCustom>()
-            .init_resource::<CustomPipeline>()
             .init_resource::<SpecializedMeshPipelines<CustomPipeline>>()
-            .add_system_to_stage(RenderStage::Extract, extract_chunk_instancings)
-            .add_system_to_stage(
-                RenderStage::Prepare,
-                prepare_chunk_instancing_instance_buffers,
+            .add_systems(ExtractSchedule, extract_chunk_instancings)
+            .add_systems(
+                Render,
+                prepare_chunk_instancing_instance_buffers.in_set(RenderSet::Prepare),
             )
-            .add_system_to_stage(RenderStage::Prepare, prepare_textures_bind_group)
-            .add_system_to_stage(RenderStage::Prepare, prepare_grass_chunk_bind_group)
-            .add_system_to_stage(RenderStage::Queue, queue_custom);
+            .add_systems(
+                Render,
+                prepare_textures_bind_group.in_set(RenderSet::Prepare),
+            )
+            .add_systems(
+                Render,
+                prepare_grass_chunk_bind_group.in_set(RenderSet::Prepare),
+            )
+            .add_systems(Render, queue_custom.in_set(RenderSet::Queue));
+    }
+
+    fn finish(&self, app: &mut App) {
+        let render_app = match app.get_sub_app_mut(RenderApp) {
+            Ok(render_app) => render_app,
+            Err(_) => return,
+        };
+
+        render_app.init_resource::<CustomPipeline>();
     }
 }
 
@@ -267,7 +289,7 @@ pub fn prepare_textures_bind_group(
     gpu_images: Res<RenderAssets<Image>>,
 ) {
     for (e, texture_handle) in image_query.iter() {
-        let gpu_image = gpu_images.get(&texture_handle).unwrap();
+        let gpu_image = gpu_images.get(&texture_handle.clone()).unwrap();
 
         let texture_bind_group = render_device.create_bind_group(&BindGroupDescriptor {
             layout: &custom_pipeline.texture_bind_group_layout,
@@ -309,7 +331,7 @@ fn queue_custom(
     custom_pipeline: Res<CustomPipeline>,
     msaa: Res<Msaa>,
     mut pipelines: ResMut<SpecializedMeshPipelines<CustomPipeline>>,
-    mut pipeline_cache: ResMut<PipelineCache>,
+    pipeline_cache: Res<PipelineCache>,
     meshes: Res<RenderAssets<Mesh>>,
     material_meshes: Query<
         (Entity, &MeshUniform, &Handle<Mesh>, &Handle<Image>),
@@ -323,17 +345,20 @@ fn queue_custom(
         .get_id::<DrawCustom>()
         .unwrap();
 
-    let msaa_key = MeshPipelineKey::from_msaa_samples(msaa.samples);
+    let msaa_key = MeshPipelineKey::from_msaa_samples(msaa.samples());
 
     for (view, mut transparent_phase) in &mut views {
+        let view_key = msaa_key | MeshPipelineKey::from_hdr(view.hdr);
         let rangefinder = view.rangefinder3d();
         for (entity, mesh_uniform, mesh_handle, image_handle) in &material_meshes {
-            if let (Some(mesh), Some(_)) = (meshes.get(mesh_handle), gpu_images.get(&image_handle))
-            {
+            if let (Some(mesh), Some(_)) = (
+                meshes.get(mesh_handle),
+                gpu_images.get(&image_handle.clone()),
+            ) {
                 let key =
-                    msaa_key | MeshPipelineKey::from_primitive_topology(mesh.primitive_topology);
+                    view_key | MeshPipelineKey::from_primitive_topology(mesh.primitive_topology);
                 let pipeline = pipelines
-                    .specialize(&mut pipeline_cache, &custom_pipeline, key, &mesh.layout)
+                    .specialize(&pipeline_cache, &custom_pipeline, key, &mesh.layout)
                     .unwrap();
                 transparent_phase.add(Transparent3d {
                     entity,
@@ -370,8 +395,10 @@ pub struct CustomPipeline {
 
 impl FromWorld for CustomPipeline {
     fn from_world(world: &mut World) -> Self {
-        let mut system_state: SystemState<Res<RenderDevice>> = SystemState::new(world);
-        let render_device = system_state.get_mut(world);
+        // let mut system_state: SystemState<Res<RenderDevice>> = SystemState::new(world);
+        // let render_device = system_state.get_mut(world);
+
+        let render_device = world.resource::<RenderDevice>();
 
         //Instancing chunk
         let chunk_instancing_bind_group_layout =
@@ -418,10 +445,12 @@ impl FromWorld for CustomPipeline {
         let shader = asset_server.load("shaders/chunk_instancing.wgsl");
 
         let mesh_pipeline = world.resource::<MeshPipeline>();
+        // let material_pipeline = world.resource::<MaterialPipeline<StandardMaterial>>();
 
         CustomPipeline {
             shader,
             mesh_pipeline: mesh_pipeline.clone(),
+            // material_pipeline: material_pipeline.clone(),
             chunk_instancing_bind_group_layout,
             texture_bind_group_layout,
         }
@@ -436,8 +465,18 @@ impl SpecializedMeshPipeline for CustomPipeline {
         key: Self::Key,
         layout: &MeshVertexBufferLayout,
     ) -> Result<RenderPipelineDescriptor, SpecializedMeshPipelineError> {
+        // let mut descriptor = self.mesh_pipeline.specialize(key, layout)?;
         let mut descriptor = self.mesh_pipeline.specialize(key, layout)?;
-        descriptor.primitive.cull_mode = None; //For grass
+
+        // meshes typically live in bind group 2. because we are using bindgroup 1
+        // we need to add MESH_BINDGROUP_1 shader def so that the bindings are correctly
+        // linked in the shader
+        // descriptor
+        //     .vertex
+        //     .shader_defs
+        //     .push("MESH_BINDGROUP_1".into());
+        // THIS DOES NOT WORK! I had to include a dummy mesh layout in the custom pipeline and then have it at bind group 2
+
         descriptor.vertex.shader = self.shader.clone();
         descriptor.vertex.buffers.push(VertexBufferLayout {
             array_stride: std::mem::size_of::<GpuInstance>() as u64,
@@ -449,12 +488,15 @@ impl SpecializedMeshPipeline for CustomPipeline {
             }],
         });
         descriptor.fragment.as_mut().unwrap().shader = self.shader.clone();
-        descriptor.layout = Some(vec![
-            self.mesh_pipeline.view_layout.clone(),
-            self.mesh_pipeline.mesh_layout.clone(),
+
+        descriptor.layout = vec![
+            self.mesh_pipeline.view_layout_multisampled.clone(),
+            // self.material_pipeline.material_layout.clone(), //Have not yet gotten the material to work. Still using own fragment shader :(
+            self.mesh_pipeline.mesh_layouts.model_only.clone(), // Add this as a dummy layout to make the shader work. It seems the mesh has to be on group 2?! Dont know what is wrong.
+            self.mesh_pipeline.mesh_layouts.model_only.clone(), // TODO: should I try different?
             self.chunk_instancing_bind_group_layout.clone(),
             self.texture_bind_group_layout.clone(),
-        ]);
+        ];
 
         Ok(descriptor)
     }
@@ -477,23 +519,29 @@ impl SpecializedMeshPipeline for CustomPipeline {
 type DrawCustom = (
     SetItemPipeline,
     SetMeshViewBindGroup<0>,
+    // SetMaterialBindGroup<StandardMaterial, 1>,// Have not yet gotten the material to work. Still using own fragment shader :(
     SetMeshBindGroup<1>,
-    SetChunkInstancingBindGroup<2>,
-    SetTextureBindGroup<3>,
+    SetMeshBindGroup<2>,
+    SetChunkInstancingBindGroup<3>,
+    SetTextureBindGroup<4>,
     DrawMeshInstanced,
 );
 
 pub struct SetTextureBindGroup<const I: usize>;
-impl<const I: usize> EntityRenderCommand for SetTextureBindGroup<I> {
+impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetTextureBindGroup<I> {
     type Param = SQuery<Read<TextureBindGroup>>;
+    type ItemWorldQuery = ();
+    type ViewWorldQuery = ();
+
     #[inline]
     fn render<'w>(
-        _view: Entity,
-        item: Entity,
+        item: &P,
+        _view: ROQueryItem<'w, Self::ViewWorldQuery>,
+        _: ROQueryItem<'w, Self::ItemWorldQuery>,
         bind_group_query: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        if let Ok(bind_group) = bind_group_query.get_inner(item) {
+        if let Ok(bind_group) = bind_group_query.get_inner(item.entity()) {
             pass.set_bind_group(I, &bind_group.0, &[]);
             // return RenderCommandResult::Success;
         }
@@ -503,16 +551,20 @@ impl<const I: usize> EntityRenderCommand for SetTextureBindGroup<I> {
 }
 
 pub struct SetChunkInstancingBindGroup<const I: usize>;
-impl<const I: usize> EntityRenderCommand for SetChunkInstancingBindGroup<I> {
+impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetChunkInstancingBindGroup<I> {
     type Param = SQuery<Read<ChunkInstancingBindGroup>>;
+    type ItemWorldQuery = ();
+    type ViewWorldQuery = ();
+
     #[inline]
     fn render<'w>(
-        _view: Entity,
-        item: Entity,
+        item: &P,
+        _view: ROQueryItem<'w, Self::ViewWorldQuery>,
+        _: ROQueryItem<'w, Self::ItemWorldQuery>,
         bind_group_query: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        if let Ok(bind_group) = bind_group_query.get_inner(item) {
+        if let Ok(bind_group) = bind_group_query.get_inner(item.entity()) {
             pass.set_bind_group(I, &bind_group.0, &[]);
             // return RenderCommandResult::Success;
         }
@@ -523,16 +575,20 @@ impl<const I: usize> EntityRenderCommand for SetChunkInstancingBindGroup<I> {
 
 pub struct DrawMeshInstanced;
 
-impl EntityRenderCommand for DrawMeshInstanced {
+impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
     type Param = (
         SRes<RenderAssets<Mesh>>,
         SQuery<Read<Handle<Mesh>>>,
         SQuery<Read<ChunkInstancingInstanceBuffer>>,
     );
+    type ItemWorldQuery = ();
+    type ViewWorldQuery = ();
+
     #[inline]
     fn render<'w>(
-        _view: Entity,
-        item: Entity,
+        item: &P,
+        _view: ROQueryItem<'w, Self::ViewWorldQuery>,
+        _: ROQueryItem<'w, Self::ItemWorldQuery>,
         (meshes, mesh_query, chunk_instancing_instance_buffer_query): SystemParamItem<
             'w,
             '_,
@@ -540,9 +596,9 @@ impl EntityRenderCommand for DrawMeshInstanced {
         >,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let mesh_handle = mesh_query.get(item).unwrap();
+        let mesh_handle = mesh_query.get(item.entity()).unwrap();
         let instance_buffer = chunk_instancing_instance_buffer_query
-            .get_inner(item)
+            .get_inner(item.entity())
             .unwrap();
 
         let gpu_mesh = match meshes.into_inner().get(mesh_handle) {
@@ -562,8 +618,8 @@ impl EntityRenderCommand for DrawMeshInstanced {
                 pass.set_index_buffer(buffer.slice(..), 0, *index_format);
                 pass.draw_indexed(0..*count, 0, 0..instance_buffer.length as u32);
             }
-            GpuBufferInfo::NonIndexed { vertex_count } => {
-                pass.draw(0..*vertex_count, 0..instance_buffer.length as u32);
+            GpuBufferInfo::NonIndexed => {
+                pass.draw(0..gpu_mesh.vertex_count, 0..instance_buffer.length as u32);
             }
         }
         RenderCommandResult::Success

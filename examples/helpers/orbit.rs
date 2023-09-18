@@ -30,9 +30,11 @@ use bevy::input::mouse::MouseScrollUnit::{Line, Pixel};
 use bevy::input::mouse::MouseWheel;
 use bevy::prelude::*;
 use bevy::render::camera::{Camera, Projection};
+use bevy::window::PrimaryWindow;
 
 const LINE_TO_PIXEL_RATIO: f32 = 0.1;
 
+#[derive(Event)]
 pub enum CameraEvents {
     Orbit(Vec2),
     Pan(Vec2),
@@ -78,12 +80,6 @@ impl Default for OrbitCamera {
     }
 }
 
-fn get_primary_window_size(windows: &Res<Windows>) -> Vec2 {
-    let window = windows.get_primary().unwrap();
-    let window = Vec2::new(window.width() as f32, window.height() as f32);
-    window
-}
-
 pub struct OrbitCameraPlugin;
 impl OrbitCameraPlugin {
     pub fn update_transform_system(
@@ -124,7 +120,7 @@ impl OrbitCameraPlugin {
 
     pub fn mouse_motion_system(
         time: Res<Time>,
-        windows: Res<Windows>,
+        primary_window: Query<&Window, With<PrimaryWindow>>,
         mut events: EventReader<CameraEvents>,
         mut query: Query<(&mut OrbitCamera, &mut Transform, &mut Camera, &Projection)>,
     ) {
@@ -154,7 +150,10 @@ impl OrbitCameraPlugin {
                     }
                     CameraEvents::Pan(delta) => {
                         // make panning distance independent of resolution and FOV,
-                        let window = get_primary_window_size(&windows);
+                        let window = Vec2::new(
+                            primary_window.get_single().unwrap().width() as f32,
+                            primary_window.get_single().unwrap().height() as f32,
+                        );
                         let mut delta_scaled = delta.clone();
                         delta_scaled *= Vec2::new(
                             perspective_proj.fov * perspective_proj.aspect_ratio,
@@ -228,11 +227,11 @@ impl OrbitCameraPlugin {
 }
 impl Plugin for OrbitCameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(Self::emit_motion_events)
-            .add_system(Self::mouse_motion_system)
-            .add_system(Self::emit_zoom_events)
-            .add_system(Self::zoom_system)
-            .add_system(Self::update_transform_system)
+        app.add_systems(Update, Self::emit_motion_events)
+            .add_systems(Update, Self::mouse_motion_system)
+            .add_systems(Update, Self::emit_zoom_events)
+            .add_systems(Update, Self::zoom_system)
+            .add_systems(Update, Self::update_transform_system)
             // .register_inspectable::<OrbitCamera>()
             .add_event::<CameraEvents>();
     }

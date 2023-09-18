@@ -1,6 +1,9 @@
 use bevy::{
     core_pipeline::core_3d::Transparent3d,
-    ecs::system::{lifetimeless::*, SystemParamItem, SystemState},
+    ecs::{
+        query::ROQueryItem,
+        system::{lifetimeless::*, SystemParamItem},
+    },
     math::prelude::*,
     pbr::{MeshPipeline, MeshPipelineKey, MeshUniform, SetMeshBindGroup, SetMeshViewBindGroup},
     prelude::*,
@@ -12,19 +15,20 @@ use bevy::{
         primitives::Aabb,
         render_asset::RenderAssets,
         render_phase::{
-            AddRenderCommand, DrawFunctions, EntityRenderCommand, RenderCommandResult, RenderPhase,
-            SetItemPipeline, TrackedRenderPass,
+            AddRenderCommand, DrawFunctions, PhaseItem, RenderCommand, RenderCommandResult,
+            RenderPhase, SetItemPipeline, TrackedRenderPass,
         },
         render_resource::*,
         renderer::RenderDevice,
         texture::ImageSampler,
         view::{ExtractedView, Msaa},
+        Render,
     },
     render::{
         extract_component::ExtractComponentPlugin,
         mesh::Indices,
         render_resource::{PrimitiveTopology, ShaderType, SpecializedMeshPipelines},
-        RenderApp, RenderStage,
+        RenderApp, RenderSet,
     },
 };
 use bytemuck::{Pod, Zeroable};
@@ -64,9 +68,9 @@ fn grass_chunk_distance_culling(
     if let Ok(camera_pos) = query_camera.get_single() {
         for (transform, mut visability, distance_culling) in query.iter_mut() {
             if camera_pos.translation.distance(transform.translation) > distance_culling.distance {
-                visability.is_visible = false;
+                *visability = Visibility::Hidden;
             } else {
-                visability.is_visible = true;
+                *visability = Visibility::Visible;
             }
         }
     }
@@ -109,24 +113,46 @@ pub struct ChunkGrassPlugin;
 
 impl Plugin for ChunkGrassPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(ExtractComponentPlugin::<ChunkGrass>::extract_visible());
-        app.add_plugin(ExtractResourcePlugin::<GrowthTextures>::default());
-        app.add_plugin(ExtractResourcePlugin::<GridConfig>::default());
+        app.add_plugins(ExtractComponentPlugin::<ChunkGrass>::extract_visible());
+        app.add_plugins(ExtractResourcePlugin::<GrowthTextures>::default());
+        app.add_plugins(ExtractResourcePlugin::<GridConfig>::default());
         app.insert_resource(GridConfig::default());
         app.insert_resource(GrowthTextures::default());
-        app.add_system(update_time_for_custom_material);
-        app.add_system(grass_chunk_distance_culling);
+        app.add_systems(Update, update_time_for_custom_material);
+        app.add_systems(Update, grass_chunk_distance_culling);
 
-        app.sub_app_mut(RenderApp)
+        let render_app = match app.get_sub_app_mut(RenderApp) {
+            Ok(render_app) => render_app,
+            Err(_) => return,
+        };
+
+        render_app
             .add_render_command::<Transparent3d, DrawCustom>()
-            .init_resource::<CustomPipeline>()
             .init_resource::<SpecializedMeshPipelines<CustomPipeline>>()
             .init_resource::<GridConfigBindGroup>()
             .init_resource::<GrowthTexturesBindGroup>()
-            .add_system_to_stage(RenderStage::Queue, queue_custom_pipeline)
-            .add_system_to_stage(RenderStage::Prepare, prepare_grid_config_bind_group)
-            .add_system_to_stage(RenderStage::Prepare, prepare_grass_chunk_bind_group)
-            .add_system_to_stage(RenderStage::Prepare, prepare_growth_textures_bind_group);
+            .add_systems(Render, queue_custom_pipeline.in_set(RenderSet::Queue))
+            .add_systems(
+                Render,
+                prepare_grid_config_bind_group.in_set(RenderSet::Prepare),
+            )
+            .add_systems(
+                Render,
+                prepare_grass_chunk_bind_group.in_set(RenderSet::Prepare),
+            )
+            .add_systems(
+                Render,
+                prepare_growth_textures_bind_group.in_set(RenderSet::Prepare),
+            );
+    }
+
+    fn finish(&self, app: &mut App) {
+        let render_app = match app.get_sub_app_mut(RenderApp) {
+            Ok(render_app) => render_app,
+            Err(_) => return,
+        };
+
+        render_app.init_resource::<CustomPipeline>();
     }
 }
 
@@ -140,7 +166,7 @@ impl GrowthTextures {
         let size = 100;
         let scale = 255.0;
         let mut data = Vec::new();
-        let pattern_scale = 0.1;
+        let pattern_scale = 0.05;
         let nr_textures = 2;
         for i in 0..nr_textures {
             let perlin = Perlin::new(i + 1); // from -1 to 1
@@ -202,8 +228,8 @@ pub struct ChunkGrass {
     pub chunk_half_extents: [f32; 2],
     pub nr_instances: u32,
     pub growth_texture_id: i32,
-    pub height_modifier: f32,
-    pub scale: f32,
+    pub height_modifier: f32, //Height modifier of the grass, determines the width/height ratio
+    pub scale: f32,           //Scale of the grass
 }
 
 // ██████████████████████████████████████████████████████████████████████████████████████████████████████████████████
@@ -223,9 +249,10 @@ pub struct ChunkGrass {
 impl ExtractComponent for ChunkGrass {
     type Query = &'static ChunkGrass;
     type Filter = ();
+    type Out = Self;
 
-    fn extract_component(item: bevy::ecs::query::QueryItem<Self::Query>) -> Self {
-        item.clone()
+    fn extract_component(item: bevy::ecs::query::QueryItem<Self::Query>) -> Option<Self> {
+        Some(item.clone())
     }
 }
 
@@ -438,7 +465,7 @@ fn queue_custom_pipeline(
     custom_pipeline: Res<CustomPipeline>,
     msaa: Res<Msaa>,
     mut pipelines: ResMut<SpecializedMeshPipelines<CustomPipeline>>,
-    mut pipeline_cache: ResMut<PipelineCache>,
+    pipeline_cache: Res<PipelineCache>,
     meshes: Res<RenderAssets<Mesh>>,
     material_meshes: Query<(Entity, &MeshUniform, &Handle<Mesh>), With<ChunkGrass>>,
     mut views: Query<(&ExtractedView, &mut RenderPhase<Transparent3d>)>,
@@ -449,18 +476,19 @@ fn queue_custom_pipeline(
         .get_id::<DrawCustom>()
         .unwrap();
 
-    let msaa_key = MeshPipelineKey::from_msaa_samples(msaa.samples);
+    let msaa_key = MeshPipelineKey::from_msaa_samples(msaa.samples());
 
     for (view, mut transparent_phase) in &mut views {
+        let view_key = msaa_key | MeshPipelineKey::from_hdr(view.hdr);
         let rangefinder = view.rangefinder3d();
         for (entity, mesh_uniform, mesh_handle) in &material_meshes {
             if let Some(mesh) = meshes.get(mesh_handle) {
                 //Only render stuff if there is a texture handle
                 if growth_textures.growth_texture_array_handle.is_some() {
-                    let key = msaa_key
+                    let key = view_key
                         | MeshPipelineKey::from_primitive_topology(mesh.primitive_topology);
                     let pipeline = pipelines
-                        .specialize(&mut pipeline_cache, &custom_pipeline, key, &mesh.layout)
+                        .specialize(&pipeline_cache, &custom_pipeline, key, &mesh.layout)
                         .unwrap();
                     transparent_phase.add(Transparent3d {
                         entity,
@@ -499,8 +527,10 @@ pub struct CustomPipeline {
 
 impl FromWorld for CustomPipeline {
     fn from_world(world: &mut World) -> Self {
-        let mut system_state: SystemState<Res<RenderDevice>> = SystemState::new(world);
-        let render_device = system_state.get_mut(world);
+        // let mut system_state: SystemState<Res<RenderDevice>> = SystemState::new(world);
+        // let render_device = system_state.get_mut(world);
+
+        let render_device = world.resource::<RenderDevice>();
 
         //NEW grass STUFF
         let grass_chunk_bind_group_layout =
@@ -588,16 +618,17 @@ impl SpecializedMeshPipeline for CustomPipeline {
         layout: &MeshVertexBufferLayout,
     ) -> Result<RenderPipelineDescriptor, SpecializedMeshPipelineError> {
         let mut descriptor = self.mesh_pipeline.specialize(key, layout)?;
+
         descriptor.primitive.cull_mode = None; //For grass
         descriptor.vertex.shader = self.shader.clone();
         descriptor.fragment.as_mut().unwrap().shader = self.shader.clone();
-        descriptor.layout = Some(vec![
-            self.mesh_pipeline.view_layout.clone(),
-            self.mesh_pipeline.mesh_layout.clone(),
+        descriptor.layout = vec![
+            self.mesh_pipeline.view_layout_multisampled.clone(),
+            self.mesh_pipeline.mesh_layouts.model_only.clone(),
             self.grass_chunk_bind_group_layout.clone(),
             self.growth_bind_group_layout.clone(),
             self.grid_config_bind_group_layout.clone(),
-        ]);
+        ];
 
         Ok(descriptor)
     }
@@ -628,29 +659,36 @@ type DrawCustom = (
 );
 
 pub struct SetChunkGrassBindGroup<const I: usize>;
-impl<const I: usize> EntityRenderCommand for SetChunkGrassBindGroup<I> {
+impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetChunkGrassBindGroup<I> {
     type Param = SQuery<Read<ChunkGrassBindGroup>>;
+    type ItemWorldQuery = ();
+    type ViewWorldQuery = ();
+
     #[inline]
     fn render<'w>(
-        _view: Entity,
-        item: Entity,
+        item: &P,
+        _view: ROQueryItem<'w, Self::ViewWorldQuery>,
+        _: ROQueryItem<'w, Self::ItemWorldQuery>,
         grass_bind_group_query: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let grass_chunk_bind_group = grass_bind_group_query.get_inner(item).unwrap();
-        pass.set_bind_group(I, &grass_chunk_bind_group.grass_chunk_bind_group, &[]);
+        let grass_chunk_bind_group = grass_bind_group_query.get_inner(item.entity()).unwrap();
+        pass.set_bind_group(I, &grass_chunk_bind_group.grass_chunk_bind_group, &[]); //Should this be a if let Some? as it is in Grass?
         RenderCommandResult::Success
     }
 }
 
 pub struct SetGrowthTexturesBindGroup<const I: usize>;
-impl<const I: usize> EntityRenderCommand for SetGrowthTexturesBindGroup<I> {
+impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetGrowthTexturesBindGroup<I> {
     type Param = SRes<GrowthTexturesBindGroup>;
+    type ItemWorldQuery = ();
+    type ViewWorldQuery = ();
 
     #[inline]
     fn render<'w>(
-        _view: Entity,
-        _item: Entity,
+        _item: &P,
+        _view: ROQueryItem<'w, Self::ViewWorldQuery>,
+        _: ROQueryItem<'w, Self::ItemWorldQuery>,
         bind_group_res: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
@@ -663,12 +701,16 @@ impl<const I: usize> EntityRenderCommand for SetGrowthTexturesBindGroup<I> {
 }
 
 pub struct SetGridConfigBindGroup<const I: usize>;
-impl<const I: usize> EntityRenderCommand for SetGridConfigBindGroup<I> {
+impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetGridConfigBindGroup<I> {
     type Param = SRes<GridConfigBindGroup>;
+    type ItemWorldQuery = ();
+    type ViewWorldQuery = ();
+
     #[inline]
     fn render<'w>(
-        _view: Entity,
-        _item: Entity,
+        _item: &P,
+        _view: ROQueryItem<'w, Self::ViewWorldQuery>,
+        _: ROQueryItem<'w, Self::ItemWorldQuery>,
         bind_group_res: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
@@ -687,20 +729,24 @@ impl<const I: usize> EntityRenderCommand for SetGridConfigBindGroup<I> {
 
 pub struct DrawMeshInstanced;
 
-impl EntityRenderCommand for DrawMeshInstanced {
+impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
     type Param = (
         SRes<RenderAssets<Mesh>>,
         SQuery<Read<Handle<Mesh>>>,
-        SQuery<Read<ChunkGrass>>,
+        SQuery<Read<ChunkGrass>>, //TODO: Should this be an ItemWorldQuery? instead checkout https://github.com/bevyengine/bevy/blob/c2b85f9b52a3dc4c0d573e33107ee3ac9fd8f4e5/examples/shader/shader_instancing.rs#L242
     );
+    type ItemWorldQuery = ();
+    type ViewWorldQuery = ();
+
     #[inline]
     fn render<'w>(
-        _view: Entity,
-        item: Entity,
+        item: &P,
+        _view: ROQueryItem<'w, Self::ViewWorldQuery>,
+        _: ROQueryItem<'w, Self::ItemWorldQuery>,
         (meshes, mesh_query, grass_chunk): SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let mesh_handle = mesh_query.get(item).unwrap();
+        let mesh_handle = mesh_query.get(item.entity()).unwrap();
 
         let gpu_mesh = match meshes.into_inner().get(mesh_handle) {
             Some(gpu_mesh) => gpu_mesh,
@@ -719,7 +765,7 @@ impl EntityRenderCommand for DrawMeshInstanced {
                 pass.draw_indexed(
                     0..*count,
                     0,
-                    0..grass_chunk.get(item).unwrap().nr_instances as u32,
+                    0..grass_chunk.get(item.entity()).unwrap().nr_instances as u32,
                 );
             }
             _ => {

@@ -7,19 +7,17 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bevy = "0.9.1"
+bevy = "0.11.2"
 bytemuck = "1.11.0"
-bevy_pbr = "0.9.1"
+bevy_pbr = "0.11.2"
 itertools = "*"
 rand = "*"
 # bevy_shader_utils = { path = "../bevy-examples/libs/bevy_shader_utils" }
 wasm-bindgen = { version = "0.2.84" }
 noise = "0.8.2"                       #Procedural Noise Generation library for Rust
-iyes_loopless = "0.9.1"
-iyes_progress = "0.7.1"
+iyes_progress = "0.9.1"
 
-bevy_asset_loader = { version = "0.14.1", features = [
-    "stageless",
+bevy_asset_loader = { version = "0.17.0", features = [
 ] } #Needed to turn on a bunch of features in order to get assetloader to work with iyes_loopless+progress
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
