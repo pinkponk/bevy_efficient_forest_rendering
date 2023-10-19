@@ -1,31 +1,69 @@
-# bevy_efficient_forest_example
+# bevy_efficient_forest_rendering
 
-Using bevy and custom render pipelines in order to render many objects in a forest using chunks for performance. Grass is rendered efficiently by not sending loads of data to the gpu but instead randomizing everything on the shader. The trees and the other objects are rendered using gpu instancing. 
+![logo](logo.png)
 
-I could render 8 million grass straws at 60fps on my gaming pc using this approach. No one should need to render this much grass but it's good to know one can :)
+![Rust Version](https://img.shields.io/badge/Rust-2021-ed1c24) 
+![Bevy Engine](https://img.shields.io/badge/Bevy-0.11.2-blueviolet)
 
-Rendering the grass with with the optimized grass renderer instead of the more general gpu instancing gets me 3x-4x better fps. (When only rendering a bunch of grass)
+## Description
 
-I'm making a game for the web in which you have to code the behavior of forest animals in order to balance an ecosystem. Follow my devlogs if you are interested: https://www.youtube.com/channel/UCqzbiRaNXJa50J4kvJvKpAg
+`bevy_efficient_forest_rendering` is a dedicated solution for creating visually impactful and performance-optimized 3D forest environments. Authored by Pinkponk, this software package utilizes the Bevy game engine and is entirely written in the Rust programming language. It employs cutting-edge techniques to manage layers of visual complexity and ensure fast, smooth rendering, even on a web platform.
 
-Compatible Bevy versions:
-- Bevy 0.11 (main)
-- Bevy 0.9 tag v0.9.1)
-- Bevy 0.8 (branch bevy-0.8.1 or tag v0.1.0)
+This package uses different sections to handle various aspects of the environment, such as ground and texture creation, grass rendering, vertex manipulation, and orbital camera creation. The code includes a myriad of variables and functions for random generation, allowing design elements within the environment to exhibit natural variation. The package also contains numerous structures, render commands, and traits that are essential for gaming environment set up. 
 
-Forest:
-Total instanced objects 192_000 (Not all visable at once, culling)
-Total grass straws 18_000_000 (Not all visable at once, culling)
-(90fps when looking around with the current camera constraints)
-(20x20 chunks):
+The `bevy_efficient_forest_rendering` package can render an impressive 8 million grass straws at 60fps on a standard gaming PC setup, providing excellent performance metrics and capabilities. The grass rendering system has been highly optimized to provide 3x-4x better frames per second than the more general GPU instancing.
 
-https://github.com/pinkponk/bevy_efficient_forest_rendering/assets/14301446/fb201c0b-7f27-45d0-b6c0-559be97e6677
+In addition, this package provides robust debugging and testing support. It is also compatible with WebAssembly environments, making it extremely flexible and versatile for cross-platform web games development.
 
-Grass 1.28 million (150fps) (2x2 chunks):
+## Installation Procedures
+To install `bevy_efficient_forest_rendering`, make sure you have Rust 2021 edition installed on your machine. Afterward, simply clone the project and install the necessary dependencies as specified in the `Cargo.toml` file. 
 
-https://github.com/pinkponk/bevy_efficient_forest_rendering/assets/14301446/e1e76388-2257-406a-bfbe-1db4e5c238af
+```bash
+git clone https://github.com/pinkponk/bevy_efficient_forest_rendering.git
+cd bevy_efficient_forest_rendering
+cargo build --release
+```
 
-My Computer:
-- Nvidia 1080 Ti
-- AMD Ryzen 5 5600X 6-Core Processor
-- 32Gb Ram 2666MHz
+## Usage Instructions
+
+To run the example 'forest', use the following command:
+
+```bash
+cargo run --example forest --release --target wasm32-unknown-unknown
+```
+For debugging, one should refer to the provided `.vscode/launch.json` file.
+
+```json
+{
+    "type": "lldb",
+    "request": "launch",
+    "name": "Debug executable 'bevy_efficient_forest_rendering'",
+     "cargo": {
+         "args": [
+             "build",
+             "example",
+             "forest"
+        ],
+     },
+     "args": [],
+     "cwd": "${workspaceFolder}",
+     "env": {
+         "RUST_LOG": "warn,bevy_efficient_forest_rendering=debug",
+         "CARGO_MANIFEST_DIR": "${workspaceFolder}",
+     },
+}
+```
+
+> Note: Make sure you've installed the necessary debuggers and the runner as specified in the `.cargo/config.toml`.
+
+For a more illustrative understanding of the project, please follow the development logs available [here](https://www.youtube.com/channel/UCqzbiRaNXJa50J4kvJvKpAg).
+
+## Contributing
+
+Contributions are more than welcome! Simply fork the repository, make your changes and then submit a pull request.
+
+## License
+
+This project is licensed under the MIT license.
+
+For any issues or suggestions, please reach out to the author at `henrik.djurestal@gmail.com`.
