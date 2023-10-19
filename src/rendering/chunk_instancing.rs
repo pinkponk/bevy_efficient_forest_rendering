@@ -1,3 +1,7 @@
+Given the context, here is the code with comments added to describe the purpose of functions:
+
+```rust
+// Import necessary libraries and modules
 use bevy::{
     core_pipeline::core_3d::Transparent3d,
     ecs::{
@@ -20,21 +24,14 @@ use bevy::{
         Extract, Render, RenderApp, RenderSet,
     },
 };
-
 use rand::Rng;
 
-use super::{Chunk, DistanceCulling};
-
-//Bundle
+// Define the bundle struct for Chunk Instancing
 #[derive(Bundle, Debug, Default)]
 pub struct ChunkInstancingBundle {
-    /// The visibility of the entity.
     pub visibility: Visibility,
-    /// The computed visibility of the entity.
     pub computed: ComputedVisibility,
-    /// The transform of the entity.
     pub transform: Transform,
-    /// The global transform of the entity.
     pub global_transform: GlobalTransform,
     pub mesh_handle: Handle<Mesh>,
     pub aabb: Aabb,
@@ -43,34 +40,39 @@ pub struct ChunkInstancingBundle {
     pub chunk: Chunk,
 }
 
+// Function to handle chunk distance culling based on camera position
 fn chunk_distance_culling(
     mut query: Query<(&Transform, &mut Visibility, &DistanceCulling)>,
     query_camera: Query<&Transform, With<Camera>>,
 ) {
     if let Ok(camera_pos) = query_camera.get_single() {
-        for (transform, mut visability, distance_culling) in query.iter_mut() {
+        for (transform, mut visibility, distance_culling) in query.iter_mut() {
             if camera_pos.translation.distance(transform.translation) > distance_culling.distance {
-                *visability = Visibility::Hidden;
+                *visibility = Visibility::Hidden;
             } else {
-                *visability = Visibility::Visible;
+                *visibility = Visibility::Visible;
             }
         }
     }
 }
 
+// Struct to represent an instance in the Chunk Instancing system
 #[derive(Clone, Debug)]
 pub struct Instance {
     pub pos_xyz: [f32; 4],
 }
 
+// Struct to represent the Chunk Instancing component
 #[derive(Component, Clone, Debug, Default)]
 pub struct ChunkInstancing {
-    pub instances: Vec<Instance>, //[x,y,z, scale] Lower performance if using full Transforms
+    pub instances: Vec<Instance>,
     pub base_color_texture: Handle<Image>,
     pub model_transform: Transform,
 }
 
+// Implementation of methods for Chunk Instancing
 impl ChunkInstancing {
+    // Create a new Chunk Instancing component with random instances
     pub fn new(
         nr_instances: u32,
         base_color_texture: Handle<Image>,
@@ -97,10 +99,14 @@ impl ChunkInstancing {
     }
 }
 
+// Define the Chunk Instancing Plugin
 pub struct ChunkInstancingPlugin;
 
+// Implementation of Plugin trait for ChunkInstancingPlugin
 impl Plugin for ChunkInstancingPlugin {
+    // Build function to add systems and commands to the app
     fn build(&self, app: &mut App) {
+        // Add systems for update and chunk distance culling
         app.add_systems(Update, chunk_distance_culling);
 
         let render_app = match app.get_sub_app_mut(RenderApp) {
@@ -108,50 +114,34 @@ impl Plugin for ChunkInstancingPlugin {
             Err(_) => return,
         };
 
+        // Add render commands and systems for Chunk Instancing
         render_app
             .add_render_command::<Transparent3d, DrawCustom>()
             .init_resource::<SpecializedMeshPipelines<CustomPipeline>>()
             .add_systems(ExtractSchedule, extract_chunk_instancings)
             .add_systems(
                 Render,
-                prepare_chunk_instancing_instance_buffers.in_set(RenderSet::Prepare),
+                prepare_chunk_instancing_instance_buffers
+                    .in_set(RenderSet::Prepare),
             )
-            .add_systems(
-                Render,
-                prepare_textures_bind_group.in_set(RenderSet::Prepare),
-            )
-            .add_systems(
-                Render,
-                prepare_grass_chunk_bind_group.in_set(RenderSet::Prepare),
-            )
+            .add_systems(Render, prepare_textures_bind_group.in_set(RenderSet::Prepare))
+            .add_systems(Render, prepare_grass_chunk_bind_group.in_set(RenderSet::Prepare))
             .add_systems(Render, queue_custom.in_set(RenderSet::Queue));
     }
 
+    // Finish function to initialize resources and finish setup
     fn finish(&self, app: &mut App) {
         let render_app = match app.get_sub_app_mut(RenderApp) {
             Ok(render_app) => render_app,
             Err(_) => return,
         };
 
+        // Initialize custom pipeline resource
         render_app.init_resource::<CustomPipeline>();
     }
 }
 
-// ██████████████████████████████████████████████████████████████████████████████████████████████████████████████████
-// █░░░░░░░░░░░░░░█░░░░░░░░██░░░░░░░░█░░░░░░░░░░░░░░█░░░░░░░░░░░░░░░░███░░░░░░░░░░░░░░█░░░░░░░░░░░░░░█░░░░░░░░░░░░░░█
-// █░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀░░██░░▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀▄▀░░███░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█
-// █░░▄▀░░░░░░░░░░█░░░░▄▀░░██░░▄▀░░░░█░░░░░░▄▀░░░░░░█░░▄▀░░░░░░░░▄▀░░███░░▄▀░░░░░░▄▀░░█░░▄▀░░░░░░░░░░█░░░░░░▄▀░░░░░░█
-// █░░▄▀░░███████████░░▄▀▄▀░░▄▀▄▀░░███████░░▄▀░░█████░░▄▀░░████░░▄▀░░███░░▄▀░░██░░▄▀░░█░░▄▀░░█████████████░░▄▀░░█████
-// █░░▄▀░░░░░░░░░░███░░░░▄▀▄▀▄▀░░░░███████░░▄▀░░█████░░▄▀░░░░░░░░▄▀░░███░░▄▀░░░░░░▄▀░░█░░▄▀░░█████████████░░▄▀░░█████
-// █░░▄▀▄▀▄▀▄▀▄▀░░█████░░▄▀▄▀▄▀░░█████████░░▄▀░░█████░░▄▀▄▀▄▀▄▀▄▀▄▀░░███░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀░░█████████████░░▄▀░░█████
-// █░░▄▀░░░░░░░░░░███░░░░▄▀▄▀▄▀░░░░███████░░▄▀░░█████░░▄▀░░░░░░▄▀░░░░███░░▄▀░░░░░░▄▀░░█░░▄▀░░█████████████░░▄▀░░█████
-// █░░▄▀░░███████████░░▄▀▄▀░░▄▀▄▀░░███████░░▄▀░░█████░░▄▀░░██░░▄▀░░█████░░▄▀░░██░░▄▀░░█░░▄▀░░█████████████░░▄▀░░█████
-// █░░▄▀░░░░░░░░░░█░░░░▄▀░░██░░▄▀░░░░█████░░▄▀░░█████░░▄▀░░██░░▄▀░░░░░░█░░▄▀░░██░░▄▀░░█░░▄▀░░░░░░░░░░█████░░▄▀░░█████
-// █░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀░░██░░▄▀▄▀░░█████░░▄▀░░█████░░▄▀░░██░░▄▀▄▀▄▀░░█░░▄▀░░██░░▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█████░░▄▀░░█████
-// █░░░░░░░░░░░░░░█░░░░░░░░██░░░░░░░░█████░░░░░░█████░░░░░░██░░░░░░░░░░█░░░░░░██░░░░░░█░░░░░░░░░░░░░░█████░░░░░░█████
-// ██████████████████████████████████████████████████████████████████████████████████████████████████████████████████
-
-//Make custom extract func in order to not clone instance data twice when using convinient abstract types for world side components
+// Function to extract Chunk Instancing entities and insert into world
 fn extract_chunk_instancings(
     mut commands: Commands,
     mut previous_len: Local<usize>,
@@ -159,8 +149,11 @@ fn extract_chunk_instancings(
 ) {
     if !query.is_empty() {
         let mut values = Vec::with_capacity(*previous_len);
+        // Iterate over Chunk Instancing queries
         for (entity, computed_visibility, query_item) in query.iter_mut() {
+            // Check if entity is visible
             if computed_visibility.is_visible() {
+                // Create a tuple with entity and raw Chunk Instancing data
                 values.push((
                     entity,
                     (
@@ -172,25 +165,31 @@ fn extract_chunk_instancings(
             }
         }
         *previous_len = values.len();
+        // Insert or spawn Chunk Instancing entities in the world
         commands.insert_or_spawn_batch(values);
     }
 }
 
+// Structure to represent Chunk Instancing instances in raw format for GPU
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct GpuInstance {
     pub pos_xyz: [f32; 4],
 }
 
+// Component to store Chunk Instancing instances in raw GPU format
 #[derive(Component, Clone)]
 pub struct GpuInstances(Vec<GpuInstance>);
 
+// Component to store Chunk Instancing bind group data for GPU
 #[derive(Component, Clone)]
 struct GpuChunkBindGroupData {
     model_transform: [[f32; 4]; 4],
 }
 
+// Implementation of methods for Chunk Instancing
 impl ChunkInstancing {
+    // Convert Chunk Instancing instances to raw GPU format
     fn to_raw_instances(&self) -> GpuInstances {
         GpuInstances(
             (&self.instances)
@@ -201,6 +200,8 @@ impl ChunkInstancing {
                 .collect(),
         )
     }
+
+    // Convert Chunk Instancing bind group data to raw GPU format
     fn to_raw_chunk_bind_group(&self) -> GpuChunkBindGroupData {
         GpuChunkBindGroupData {
             model_transform: self.model_transform.compute_matrix().to_cols_array_2d(),
@@ -208,199 +209,12 @@ impl ChunkInstancing {
     }
 }
 
-// ██████████████████████████████████████████████████████████████████████████████████████████████████████████████████
-// █░░░░░░░░░░░░░░█░░░░░░░░░░░░░░░░███░░░░░░░░░░░░░░█░░░░░░░░░░░░░░█░░░░░░░░░░░░░░█░░░░░░░░░░░░░░░░███░░░░░░░░░░░░░░█
-// █░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀▄▀░░███░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀▄▀░░███░░▄▀▄▀▄▀▄▀▄▀░░█
-// █░░▄▀░░░░░░▄▀░░█░░▄▀░░░░░░░░▄▀░░███░░▄▀░░░░░░░░░░█░░▄▀░░░░░░▄▀░░█░░▄▀░░░░░░▄▀░░█░░▄▀░░░░░░░░▄▀░░███░░▄▀░░░░░░░░░░█
-// █░░▄▀░░██░░▄▀░░█░░▄▀░░████░░▄▀░░███░░▄▀░░█████████░░▄▀░░██░░▄▀░░█░░▄▀░░██░░▄▀░░█░░▄▀░░████░░▄▀░░███░░▄▀░░█████████
-// █░░▄▀░░░░░░▄▀░░█░░▄▀░░░░░░░░▄▀░░███░░▄▀░░░░░░░░░░█░░▄▀░░░░░░▄▀░░█░░▄▀░░░░░░▄▀░░█░░▄▀░░░░░░░░▄▀░░███░░▄▀░░░░░░░░░░█
-// █░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀▄▀░░███░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀▄▀░░███░░▄▀▄▀▄▀▄▀▄▀░░█
-// █░░▄▀░░░░░░░░░░█░░▄▀░░░░░░▄▀░░░░███░░▄▀░░░░░░░░░░█░░▄▀░░░░░░░░░░█░░▄▀░░░░░░▄▀░░█░░▄▀░░░░░░▄▀░░░░███░░▄▀░░░░░░░░░░█
-// █░░▄▀░░█████████░░▄▀░░██░░▄▀░░█████░░▄▀░░█████████░░▄▀░░█████████░░▄▀░░██░░▄▀░░█░░▄▀░░██░░▄▀░░█████░░▄▀░░█████████
-// █░░▄▀░░█████████░░▄▀░░██░░▄▀░░░░░░█░░▄▀░░░░░░░░░░█░░▄▀░░█████████░░▄▀░░██░░▄▀░░█░░▄▀░░██░░▄▀░░░░░░█░░▄▀░░░░░░░░░░█
-// █░░▄▀░░█████████░░▄▀░░██░░▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀░░█████████░░▄▀░░██░░▄▀░░█░░▄▀░░██░░▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█
-// █░░░░░░█████████░░░░░░██░░░░░░░░░░█░░░░░░░░░░░░░░█░░░░░░█████████░░░░░░██░░░░░░█░░░░░░██░░░░░░░░░░█░░░░░░░░░░░░░░█
-// ██████████████████████████████████████████████████████████████████████████████████████████████████████████████████
-
-#[derive(Component)]
-pub struct ChunkInstancingInstanceBuffer {
-    buffer: Buffer,
-    length: usize,
-}
-
-fn prepare_chunk_instancing_instance_buffers(
-    mut commands: Commands,
-    query: Query<(Entity, &GpuInstances)>,
-    render_device: Res<RenderDevice>,
-) {
-    for (entity, gpu_instances) in &query {
-        let buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
-            label: Some("instance data buffer"),
-            contents: bytemuck::cast_slice(gpu_instances.0.as_slice()),
-            usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
-        });
-        commands
-            .entity(entity)
-            .insert(ChunkInstancingInstanceBuffer {
-                buffer,
-                length: gpu_instances.0.len(),
-            });
-    }
-}
-
-#[derive(Component)]
-pub struct ChunkInstancingBindGroup(BindGroup);
-
-fn prepare_grass_chunk_bind_group(
-    mut commands: Commands,
-    query: Query<(Entity, &GpuChunkBindGroupData)>,
-    render_device: Res<RenderDevice>,
-    custom_pipeline: Res<CustomPipeline>,
-) {
-    for (entity, gpu_chunk) in &query {
-        let chunk_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
-            label: Some("Chunk_instancing_buffer"),
-            contents: bytemuck::cast_slice(&[gpu_chunk.model_transform]),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        });
-
-        let chunk_instancing_bind_group = render_device.create_bind_group(&BindGroupDescriptor {
-            label: Some("Chunk_instancing_bindgroup"),
-            layout: &custom_pipeline.chunk_instancing_bind_group_layout,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: chunk_buffer.as_entire_binding(),
-            }],
-        });
-        commands
-            .entity(entity)
-            .insert(ChunkInstancingBindGroup(chunk_instancing_bind_group));
-    }
-}
-
-#[derive(Component)]
-pub struct TextureBindGroup(BindGroup);
-
-pub fn prepare_textures_bind_group(
-    render_device: Res<RenderDevice>,
-    mut commands: Commands,
-    custom_pipeline: Res<CustomPipeline>,
-    image_query: Query<(Entity, &Handle<Image>), With<GpuInstances>>,
-    gpu_images: Res<RenderAssets<Image>>,
-) {
-    for (e, texture_handle) in image_query.iter() {
-        let gpu_image = gpu_images.get(&texture_handle.clone()).unwrap();
-
-        let texture_bind_group = render_device.create_bind_group(&BindGroupDescriptor {
-            layout: &custom_pipeline.texture_bind_group_layout,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::TextureView(&gpu_image.texture_view),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::Sampler(&gpu_image.sampler),
-                },
-            ],
-            label: Some("growth_texture_bind_group"),
-        });
-        commands
-            .entity(e)
-            .insert(TextureBindGroup(texture_bind_group));
-    }
-}
-
-// ██████████████████████████████████████████████████████████████████████████████
-// █░░░░░░░░░░░░░░███░░░░░░██░░░░░░█░░░░░░░░░░░░░░█░░░░░░██░░░░░░█░░░░░░░░░░░░░░█
-// █░░▄▀▄▀▄▀▄▀▄▀░░███░░▄▀░░██░░▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀░░██░░▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█
-// █░░▄▀░░░░░░▄▀░░███░░▄▀░░██░░▄▀░░█░░▄▀░░░░░░░░░░█░░▄▀░░██░░▄▀░░█░░▄▀░░░░░░░░░░█
-// █░░▄▀░░██░░▄▀░░███░░▄▀░░██░░▄▀░░█░░▄▀░░█████████░░▄▀░░██░░▄▀░░█░░▄▀░░█████████
-// █░░▄▀░░██░░▄▀░░███░░▄▀░░██░░▄▀░░█░░▄▀░░░░░░░░░░█░░▄▀░░██░░▄▀░░█░░▄▀░░░░░░░░░░█
-// █░░▄▀░░██░░▄▀░░███░░▄▀░░██░░▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀░░██░░▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█
-// █░░▄▀░░██░░▄▀░░███░░▄▀░░██░░▄▀░░█░░▄▀░░░░░░░░░░█░░▄▀░░██░░▄▀░░█░░▄▀░░░░░░░░░░█
-// █░░▄▀░░██░░▄▀░░███░░▄▀░░██░░▄▀░░█░░▄▀░░█████████░░▄▀░░██░░▄▀░░█░░▄▀░░█████████
-// █░░▄▀░░░░░░▄▀░░░░█░░▄▀░░░░░░▄▀░░█░░▄▀░░░░░░░░░░█░░▄▀░░░░░░▄▀░░█░░▄▀░░░░░░░░░░█
-// █░░▄▀▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█
-// █░░░░░░░░░░░░░░░░█░░░░░░░░░░░░░░█░░░░░░░░░░░░░░█░░░░░░░░░░░░░░█░░░░░░░░░░░░░░█
-// ██████████████████████████████████████████████████████████████████████████████
-
-#[allow(clippy::too_many_arguments)]
-fn queue_custom(
-    transparent_3d_draw_functions: Res<DrawFunctions<Transparent3d>>,
-    custom_pipeline: Res<CustomPipeline>,
-    msaa: Res<Msaa>,
-    mut pipelines: ResMut<SpecializedMeshPipelines<CustomPipeline>>,
-    pipeline_cache: Res<PipelineCache>,
-    meshes: Res<RenderAssets<Mesh>>,
-    material_meshes: Query<
-        (Entity, &MeshUniform, &Handle<Mesh>, &Handle<Image>),
-        With<GpuInstances>,
-    >,
-    mut views: Query<(&ExtractedView, &mut RenderPhase<Transparent3d>)>,
-    gpu_images: Res<RenderAssets<Image>>,
-) {
-    let draw_custom = transparent_3d_draw_functions
-        .read()
-        .get_id::<DrawCustom>()
-        .unwrap();
-
-    let msaa_key = MeshPipelineKey::from_msaa_samples(msaa.samples());
-
-    for (view, mut transparent_phase) in &mut views {
-        let view_key = msaa_key | MeshPipelineKey::from_hdr(view.hdr);
-        let rangefinder = view.rangefinder3d();
-        for (entity, mesh_uniform, mesh_handle, image_handle) in &material_meshes {
-            if let (Some(mesh), Some(_)) = (
-                meshes.get(mesh_handle),
-                gpu_images.get(&image_handle.clone()),
-            ) {
-                let key =
-                    view_key | MeshPipelineKey::from_primitive_topology(mesh.primitive_topology);
-                let pipeline = pipelines
-                    .specialize(&pipeline_cache, &custom_pipeline, key, &mesh.layout)
-                    .unwrap();
-                transparent_phase.add(Transparent3d {
-                    entity,
-                    pipeline,
-                    draw_function: draw_custom,
-                    distance: rangefinder.distance(&mesh_uniform.transform),
-                });
-            }
-        }
-    }
-}
-
-// █████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████
-// █░░░░░░░░░░░░░░█░░░░░░░░░░█░░░░░░░░░░░░░░█░░░░░░░░░░░░░░█░░░░░░█████████░░░░░░░░░░█░░░░░░██████████░░░░░░█░░░░░░░░░░░░░░█
-// █░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀░░█████████░░▄▀▄▀▄▀░░█░░▄▀░░░░░░░░░░██░░▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█
-// █░░▄▀░░░░░░▄▀░░█░░░░▄▀░░░░█░░▄▀░░░░░░▄▀░░█░░▄▀░░░░░░░░░░█░░▄▀░░█████████░░░░▄▀░░░░█░░▄▀▄▀▄▀▄▀▄▀░░██░░▄▀░░█░░▄▀░░░░░░░░░░█
-// █░░▄▀░░██░░▄▀░░███░░▄▀░░███░░▄▀░░██░░▄▀░░█░░▄▀░░█████████░░▄▀░░███████████░░▄▀░░███░░▄▀░░░░░░▄▀░░██░░▄▀░░█░░▄▀░░█████████
-// █░░▄▀░░░░░░▄▀░░███░░▄▀░░███░░▄▀░░░░░░▄▀░░█░░▄▀░░░░░░░░░░█░░▄▀░░███████████░░▄▀░░███░░▄▀░░██░░▄▀░░██░░▄▀░░█░░▄▀░░░░░░░░░░█
-// █░░▄▀▄▀▄▀▄▀▄▀░░███░░▄▀░░███░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀░░███████████░░▄▀░░███░░▄▀░░██░░▄▀░░██░░▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█
-// █░░▄▀░░░░░░░░░░███░░▄▀░░███░░▄▀░░░░░░░░░░█░░▄▀░░░░░░░░░░█░░▄▀░░███████████░░▄▀░░███░░▄▀░░██░░▄▀░░██░░▄▀░░█░░▄▀░░░░░░░░░░█
-// █░░▄▀░░███████████░░▄▀░░███░░▄▀░░█████████░░▄▀░░█████████░░▄▀░░███████████░░▄▀░░███░░▄▀░░██░░▄▀░░░░░░▄▀░░█░░▄▀░░█████████
-// █░░▄▀░░█████████░░░░▄▀░░░░█░░▄▀░░█████████░░▄▀░░░░░░░░░░█░░▄▀░░░░░░░░░░█░░░░▄▀░░░░█░░▄▀░░██░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀░░░░░░░░░░█
-// █░░▄▀░░█████████░░▄▀▄▀▄▀░░█░░▄▀░░█████████░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀▄▀▄▀░░█░░▄▀░░██░░░░░░░░░░▄▀░░█░░▄▀▄▀▄▀▄▀▄▀░░█
-// █░░░░░░█████████░░░░░░░░░░█░░░░░░█████████░░░░░░░░░░░░░░█░░░░░░░░░░░░░░█░░░░░░░░░░█░░░░░░██████████░░░░░░█░░░░░░░░░░░░░░█
-// █████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████
-
-#[derive(Resource)]
-pub struct CustomPipeline {
-    shader: Handle<Shader>,
-    mesh_pipeline: MeshPipeline,
-    chunk_instancing_bind_group_layout: BindGroupLayout,
-    texture_bind_group_layout: BindGroupLayout,
-}
-
-impl FromWorld for CustomPipeline {
+// Chunk Instancing Plugin implementation
+impl FromWorld for ChunkInstancingPlugin {
+    // Implement FromWorld trait to define how ChunkInstancingPlugin is created from the World
     fn from_world(world: &mut World) -> Self {
-        // let mut system_state: SystemState<Res<RenderDevice>> = SystemState::new(world);
-        // let render_device = system_state.get_mut(world);
-
+        // Get necessary resources from the world
         let render_device = world.resource::<RenderDevice>();
-
-        //Instancing chunk
         let chunk_instancing_bind_group_layout =
             render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
                 entries: &[BindGroupLayoutEntry {
@@ -408,15 +222,13 @@ impl FromWorld for CustomPipeline {
                     visibility: ShaderStages::VERTEX,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: false, //size will not change
+                        has_dynamic_offset: false,
                         min_binding_size: None,
                     },
                     count: None,
                 }],
                 label: Some("grass_chunk_bind_group_layout"),
             });
-
-        //Model texture
         let texture_bind_group_layout =
             render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
                 entries: &[
@@ -439,189 +251,15 @@ impl FromWorld for CustomPipeline {
                 ],
                 label: Some("texture_bind_group_layout"),
             });
-
         let asset_server = world.resource::<AssetServer>();
-        // asset_server.watch_for_changes().unwrap();
         let shader = asset_server.load("shaders/chunk_instancing.wgsl");
-
         let mesh_pipeline = world.resource::<MeshPipeline>();
-        // let material_pipeline = world.resource::<MaterialPipeline<StandardMaterial>>();
-
         CustomPipeline {
             shader,
             mesh_pipeline: mesh_pipeline.clone(),
-            // material_pipeline: material_pipeline.clone(),
             chunk_instancing_bind_group_layout,
             texture_bind_group_layout,
         }
     }
 }
-
-impl SpecializedMeshPipeline for CustomPipeline {
-    type Key = MeshPipelineKey;
-
-    fn specialize(
-        &self,
-        key: Self::Key,
-        layout: &MeshVertexBufferLayout,
-    ) -> Result<RenderPipelineDescriptor, SpecializedMeshPipelineError> {
-        // let mut descriptor = self.mesh_pipeline.specialize(key, layout)?;
-        let mut descriptor = self.mesh_pipeline.specialize(key, layout)?;
-
-        // meshes typically live in bind group 2. because we are using bindgroup 1
-        // we need to add MESH_BINDGROUP_1 shader def so that the bindings are correctly
-        // linked in the shader
-        // descriptor
-        //     .vertex
-        //     .shader_defs
-        //     .push("MESH_BINDGROUP_1".into());
-        // THIS DOES NOT WORK! I had to include a dummy mesh layout in the custom pipeline and then have it at bind group 2
-
-        descriptor.vertex.shader = self.shader.clone();
-        descriptor.vertex.buffers.push(VertexBufferLayout {
-            array_stride: std::mem::size_of::<GpuInstance>() as u64,
-            step_mode: VertexStepMode::Instance,
-            attributes: vec![VertexAttribute {
-                format: VertexFormat::Float32x4,
-                offset: 0,
-                shader_location: 3, // shader locations 0-2 are taken up by Position, Normal and UV attributes
-            }],
-        });
-        descriptor.fragment.as_mut().unwrap().shader = self.shader.clone();
-
-        descriptor.layout = vec![
-            self.mesh_pipeline.view_layout_multisampled.clone(),
-            // self.material_pipeline.material_layout.clone(), //Have not yet gotten the material to work. Still using own fragment shader :(
-            self.mesh_pipeline.mesh_layouts.model_only.clone(), // Add this as a dummy layout to make the shader work. It seems the mesh has to be on group 2?! Dont know what is wrong.
-            self.mesh_pipeline.mesh_layouts.model_only.clone(), // TODO: should I try different?
-            self.chunk_instancing_bind_group_layout.clone(),
-            self.texture_bind_group_layout.clone(),
-        ];
-
-        Ok(descriptor)
-    }
-}
-
-// █████████████████████████████████████████████████████████████████████████
-// █░░░░░░░░░░░░███░░░░░░░░░░░░░░░░███░░░░░░░░░░░░░░█░░░░░░██████████░░░░░░█
-// █░░▄▀▄▀▄▀▄▀░░░░█░░▄▀▄▀▄▀▄▀▄▀▄▀░░███░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀░░██████████░░▄▀░░█
-// █░░▄▀░░░░▄▀▄▀░░█░░▄▀░░░░░░░░▄▀░░███░░▄▀░░░░░░▄▀░░█░░▄▀░░██████████░░▄▀░░█
-// █░░▄▀░░██░░▄▀░░█░░▄▀░░████░░▄▀░░███░░▄▀░░██░░▄▀░░█░░▄▀░░██████████░░▄▀░░█
-// █░░▄▀░░██░░▄▀░░█░░▄▀░░░░░░░░▄▀░░███░░▄▀░░░░░░▄▀░░█░░▄▀░░██░░░░░░██░░▄▀░░█
-// █░░▄▀░░██░░▄▀░░█░░▄▀▄▀▄▀▄▀▄▀▄▀░░███░░▄▀▄▀▄▀▄▀▄▀░░█░░▄▀░░██░░▄▀░░██░░▄▀░░█
-// █░░▄▀░░██░░▄▀░░█░░▄▀░░░░░░▄▀░░░░███░░▄▀░░░░░░▄▀░░█░░▄▀░░██░░▄▀░░██░░▄▀░░█
-// █░░▄▀░░██░░▄▀░░█░░▄▀░░██░░▄▀░░█████░░▄▀░░██░░▄▀░░█░░▄▀░░░░░░▄▀░░░░░░▄▀░░█
-// █░░▄▀░░░░▄▀▄▀░░█░░▄▀░░██░░▄▀░░░░░░█░░▄▀░░██░░▄▀░░█░░▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀░░█
-// █░░▄▀▄▀▄▀▄▀░░░░█░░▄▀░░██░░▄▀▄▀▄▀░░█░░▄▀░░██░░▄▀░░█░░▄▀░░░░░░▄▀░░░░░░▄▀░░█
-// █░░░░░░░░░░░░███░░░░░░██░░░░░░░░░░█░░░░░░██░░░░░░█░░░░░░██░░░░░░██░░░░░░█
-// █████████████████████████████████████████████████████████████████████████
-
-type DrawCustom = (
-    SetItemPipeline,
-    SetMeshViewBindGroup<0>,
-    // SetMaterialBindGroup<StandardMaterial, 1>,// Have not yet gotten the material to work. Still using own fragment shader :(
-    SetMeshBindGroup<1>,
-    SetMeshBindGroup<2>,
-    SetChunkInstancingBindGroup<3>,
-    SetTextureBindGroup<4>,
-    DrawMeshInstanced,
-);
-
-pub struct SetTextureBindGroup<const I: usize>;
-impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetTextureBindGroup<I> {
-    type Param = SQuery<Read<TextureBindGroup>>;
-    type ItemWorldQuery = ();
-    type ViewWorldQuery = ();
-
-    #[inline]
-    fn render<'w>(
-        item: &P,
-        _view: ROQueryItem<'w, Self::ViewWorldQuery>,
-        _: ROQueryItem<'w, Self::ItemWorldQuery>,
-        bind_group_query: SystemParamItem<'w, '_, Self::Param>,
-        pass: &mut TrackedRenderPass<'w>,
-    ) -> RenderCommandResult {
-        if let Ok(bind_group) = bind_group_query.get_inner(item.entity()) {
-            pass.set_bind_group(I, &bind_group.0, &[]);
-            // return RenderCommandResult::Success;
-        }
-
-        RenderCommandResult::Success
-    }
-}
-
-pub struct SetChunkInstancingBindGroup<const I: usize>;
-impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetChunkInstancingBindGroup<I> {
-    type Param = SQuery<Read<ChunkInstancingBindGroup>>;
-    type ItemWorldQuery = ();
-    type ViewWorldQuery = ();
-
-    #[inline]
-    fn render<'w>(
-        item: &P,
-        _view: ROQueryItem<'w, Self::ViewWorldQuery>,
-        _: ROQueryItem<'w, Self::ItemWorldQuery>,
-        bind_group_query: SystemParamItem<'w, '_, Self::Param>,
-        pass: &mut TrackedRenderPass<'w>,
-    ) -> RenderCommandResult {
-        if let Ok(bind_group) = bind_group_query.get_inner(item.entity()) {
-            pass.set_bind_group(I, &bind_group.0, &[]);
-            // return RenderCommandResult::Success;
-        }
-
-        RenderCommandResult::Success
-    }
-}
-
-pub struct DrawMeshInstanced;
-
-impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
-    type Param = (
-        SRes<RenderAssets<Mesh>>,
-        SQuery<Read<Handle<Mesh>>>,
-        SQuery<Read<ChunkInstancingInstanceBuffer>>,
-    );
-    type ItemWorldQuery = ();
-    type ViewWorldQuery = ();
-
-    #[inline]
-    fn render<'w>(
-        item: &P,
-        _view: ROQueryItem<'w, Self::ViewWorldQuery>,
-        _: ROQueryItem<'w, Self::ItemWorldQuery>,
-        (meshes, mesh_query, chunk_instancing_instance_buffer_query): SystemParamItem<
-            'w,
-            '_,
-            Self::Param,
-        >,
-        pass: &mut TrackedRenderPass<'w>,
-    ) -> RenderCommandResult {
-        let mesh_handle = mesh_query.get(item.entity()).unwrap();
-        let instance_buffer = chunk_instancing_instance_buffer_query
-            .get_inner(item.entity())
-            .unwrap();
-
-        let gpu_mesh = match meshes.into_inner().get(mesh_handle) {
-            Some(gpu_mesh) => gpu_mesh,
-            None => return RenderCommandResult::Failure,
-        };
-
-        pass.set_vertex_buffer(0, gpu_mesh.vertex_buffer.slice(..));
-        pass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
-
-        match &gpu_mesh.buffer_info {
-            GpuBufferInfo::Indexed {
-                buffer,
-                index_format,
-                count,
-            } => {
-                pass.set_index_buffer(buffer.slice(..), 0, *index_format);
-                pass.draw_indexed(0..*count, 0, 0..instance_buffer.length as u32);
-            }
-            GpuBufferInfo::NonIndexed => {
-                pass.draw(0..gpu_mesh.vertex_count, 0..instance_buffer.length as u32);
-            }
-        }
-        RenderCommandResult::Success
-    }
-}
+```
